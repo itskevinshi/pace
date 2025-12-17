@@ -59,19 +59,28 @@ async function processListing() {
     // Wait for page content to load
     await waitForContent();
 
-    const address = extractAddress();
+    // Load settings
+    const { workAddress, debugMode } = await chrome.storage.sync.get(['workAddress', 'debugMode']);
+
+    if (debugMode) {
+      console.group('[Pace Debug] Listing Processing');
+      console.log('URL:', window.location.href);
+    }
+
+    const address = extractAddress(debugMode);
     if (!address) {
+      if (debugMode) {
+        console.error('Failed to extract address from page');
+        console.groupEnd();
+      }
       console.log('[Pace] Could not extract address from this page');
       injectWidget({ error: 'Could not detect address on this page.' });
       return;
     }
 
-    // Load work address for display + Google Maps deep link.
-    let workAddress;
-    try {
-      ({ workAddress } = await chrome.storage.sync.get(['workAddress']));
-    } catch (e) {
-      // Non-fatal; service worker will still validate.
+    if (debugMode) {
+      console.log('Extracted Address:', address);
+      console.log('Work Address:', workAddress);
     }
 
     console.log('[Pace] Extracted address:', address);
@@ -84,6 +93,16 @@ async function processListing() {
       type: 'GET_COMMUTE_TIMES',
       apartmentAddress: address
     });
+
+    if (debugMode) {
+      console.log('Service Worker Response:', response);
+      if (response.debug) {
+        console.group('API Steps');
+        response.debug.steps.forEach(s => console.log(`[${s.step}]`, s));
+        console.groupEnd();
+      }
+      console.groupEnd();
+    }
 
     if (response.error) {
       injectWidget({ error: response.error, apartmentAddress: address, workAddress });
@@ -123,28 +142,23 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function extractAddress() {
+function extractAddress(debugMode) {
   // Try multiple extraction strategies in order of reliability
+  const strategies = [
+    { name: 'JSON-LD', fn: extractFromJsonLd },
+    { name: 'Meta Tags', fn: extractFromMeta },
+    { name: 'Page Title', fn: extractFromTitle },
+    { name: 'DOM Elements', fn: extractFromDom },
+    { name: 'URL Parsing', fn: extractFromUrl }
+  ];
 
-  // 1. JSON-LD structured data (most reliable)
-  const jsonLdAddress = extractFromJsonLd();
-  if (jsonLdAddress) return jsonLdAddress;
-
-  // 2. Meta tags
-  const metaAddress = extractFromMeta();
-  if (metaAddress) return metaAddress;
-
-  // 3. Page title (often contains address)
-  const titleAddress = extractFromTitle();
-  if (titleAddress) return titleAddress;
-
-  // 4. DOM elements with address-related classes
-  const domAddress = extractFromDom();
-  if (domAddress) return domAddress;
-
-  // 5. URL parsing as last resort
-  const urlAddress = extractFromUrl();
-  if (urlAddress) return urlAddress;
+  for (const strategy of strategies) {
+    const result = strategy.fn();
+    if (debugMode) {
+      console.log(`Strategy [${strategy.name}]:`, result || 'No match');
+    }
+    if (result) return result;
+  }
 
   return null;
 }
