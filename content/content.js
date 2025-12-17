@@ -307,13 +307,30 @@ function removeWidget() {
 function injectWidget({ loading, error, morning, evening, apartmentAddress, workAddress }) {
   removeWidget();
 
+  const headerHtml = `
+    <div class="pace-header">
+      <svg class="pace-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M7 2h10a3 3 0 0 1 3 3v10a3 3 0 0 1-2 2.83V19a1 1 0 1 1-2 0v-1H8v1a1 1 0 1 1-2 0v-1.17A3 3 0 0 1 4 15V5a3 3 0 0 1 3-3Zm10 2H7a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1ZM8 6h8a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2Zm0 4h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2Zm7 0h1a1 1 0 1 1 0 2h-1a1 1 0 1 1 0-2Zm-7 9a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm8 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Z"/>
+      </svg>
+      <span class="pace-title">COMMUTE TO WORK</span>
+    </div>
+  `;
+
   const hasRoute = Boolean(apartmentAddress && workAddress);
   const routeHtml = hasRoute
     ? `
       <div class="pace-route" title="${escapeHtml(`${apartmentAddress} → ${workAddress}`)}">
         <span class="pace-route-part">${escapeHtml(formatShortAddress(apartmentAddress))}</span>
-        <span class="pace-route-arrow">&#8594;</span>
+        <span class="pace-route-to">to</span>
         <span class="pace-route-part">${escapeHtml(formatShortAddress(workAddress))}</span>
+      </div>
+    `
+    : '';
+
+  const actionHtml = hasRoute && !loading && !error
+    ? `
+      <div class="pace-actions">
+        <button type="button" class="pace-btn" data-pace-action="open-route">VIEW DETAILED ROUTE</button>
       </div>
     `
     : '';
@@ -328,10 +345,7 @@ function injectWidget({ loading, error, morning, evening, apartmentAddress, work
 
   if (loading) {
     widget.innerHTML = `
-      <div class="pace-header">
-        <span class="pace-icon">&#128651;</span>
-        <span class="pace-title">Commute to Work</span>
-      </div>
+      ${headerHtml}
       ${routeHtml}
       <div class="pace-loading">
         <div class="pace-spinner"></div>
@@ -340,10 +354,7 @@ function injectWidget({ loading, error, morning, evening, apartmentAddress, work
     `;
   } else if (error) {
     widget.innerHTML = `
-      <div class="pace-header">
-        <span class="pace-icon">&#128651;</span>
-        <span class="pace-title">Commute to Work</span>
-      </div>
+      ${headerHtml}
       ${routeHtml}
       <div class="pace-error">
         <span class="pace-error-icon">&#9888;</span>
@@ -352,41 +363,40 @@ function injectWidget({ loading, error, morning, evening, apartmentAddress, work
     `;
   } else {
     widget.innerHTML = `
-      <div class="pace-header">
-        <span class="pace-icon">&#128651;</span>
-        <span class="pace-title">Commute to Work</span>
-      </div>
+      ${headerHtml}
       ${routeHtml}
       <div class="pace-times">
         <div class="pace-row pace-main">
-          <span class="pace-label">Transit Time</span>
           <span class="pace-value pace-large">${escapeHtml(morning?.text || 'N/A')}</span>
         </div>
       </div>
-      <div class="pace-note">Average public transit time</div>
+      <div class="pace-note">Average public transit time (provided by Geoapify)</div>
+      ${actionHtml}
     `;
   }
 
-  // Clicking the card opens Google Maps directions instead of StreetEasy navigation.
-  // Use capture to intercept clicks even if the widget was inserted within a link.
-  widget.addEventListener(
-    'click',
-    (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (typeof event.stopImmediatePropagation === 'function') {
-        event.stopImmediatePropagation();
-      }
+  // Button-only action: open Google Maps directions.
+  const actionButton = widget.querySelector('[data-pace-action="open-route"]');
+  if (actionButton) {
+    actionButton.addEventListener(
+      'click',
+      (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === 'function') {
+          event.stopImmediatePropagation();
+        }
 
-      const from = widget.dataset.paceFrom;
-      const to = widget.dataset.paceTo;
-      if (!from || !to) return;
+        const from = widget.dataset.paceFrom;
+        const to = widget.dataset.paceTo;
+        if (!from || !to) return;
 
-      const url = buildGoogleMapsDirectionsUrl(from, to);
-      window.open(url, '_blank', 'noopener,noreferrer');
-    },
-    true
-  );
+        const url = buildGoogleMapsDirectionsUrl(from, to);
+        window.open(url, '_blank', 'noopener,noreferrer');
+      },
+      true
+    );
+  }
 
   // Find best insertion point
   const insertionPoint = findInsertionPoint();
