@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:streeteasy.com)",
+      "WebFetch(domain:developers.google.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:developer.chrome.com)",
+      "Bash(node:*)",
+      "Bash(python:*)",
+      "WebFetch(domain:apidocs.geoapify.com)"
+    ]
+  }
+}
