@@ -1,105 +1,75 @@
-# Pace
+# Pace - StreetEasy Commute Times
 
-A Chrome extension that automatically displays public transit commute times on StreetEasy apartment listings.
+Pace is a browser extension that automatically calculates and displays public transit commute times directly on StreetEasy apartment listings. It helps you make better decisions by showing you exactly how long it will take to get to work from any apartment you're viewing.
 
 ## Features
 
-- Automatically detects apartment addresses on StreetEasy listing pages
-- Shows transit commute time to your work location
-- Uses Geoapify's free API (no credit card required!)
-- Works seamlessly - no clicking required
+- **Instant Commute Calculation**: Automatically detects the apartment address and calculates the commute time to your configured work address.
+- **Seamless Integration**: Displays the commute time prominently on the listing page.
+- **Smart Address Search**: Includes an address autocomplete feature to easily find and set your work location.
+- **Privacy Focused**: Your API key and address are stored locally in your browser.
+
+### See it in action
+
+**View commute times directly on listings:**
+![Commute Time Widget](images/listing_widget_demo.png)
+
+**Smart address autofill:**
+![Address Autofill](images/work_address_input_autofill_demo.png)
 
 ## Installation
 
-### 1. Get a Free Geoapify API Key
+Since this extension is not yet in the Chrome Web Store, you can install it in Developer Mode:
 
-1. Go to [Geoapify Registration](https://myprojects.geoapify.com/register)
-2. Create a free account (no credit card needed)
-3. Create a new project
-4. Copy your API key
+1.  Clone or download this repository to your computer.
+2.  Open Chrome and navigate to `chrome://extensions/`.
+3.  Enable **Developer mode** in the top right corner.
+4.  Click **Load unpacked**.
+5.  Select the folder where you saved this repository (the folder containing `manifest.json`).
 
-**Free tier includes 3,000 API calls per day** - more than enough for apartment hunting!
+## Configuration
 
-### 2. Load the Extension in Chrome
+To use Pace, you need a free API key from Geoapify. Follow these steps to set it up:
 
-1. Open Chrome and go to `chrome://extensions/`
-2. Enable **Developer mode** (toggle in top right)
-3. Click **Load unpacked**
-4. Select the `pace` folder containing this extension
+### 1. Get your free API Key
+Open the Pace extension popup and click on **"Get free API key"**.
+![Click Get Free API Key](images/1_click_get_free_api_key.png)
 
-### 3. Configure the Extension
+### 2. Register an account
+Sign up for a free account on Geoapify (no credit card required).
+![Register Account](images/2_register_geoapify_account.png)
 
-1. Click the Pace icon in your Chrome toolbar
-2. Enter your work address (full address including city)
-3. Enter your Geoapify API key
-4. Click **Save Settings**
+### 3. Create a project
+Once logged in, click on **"Create a project"** in the dashboard.
+![Create Project](images/3_click_create_a_project.png)
 
-## Usage
+### 4. Name your project
+Give your project a name (e.g., "Pace Extension") and click OK.
+![Name Project](images/4_name_project.png)
 
-Just browse StreetEasy! When you view any apartment listing, Pace will automatically:
+### 5. Copy your API Key
+Copy the generated API Key from the dashboard.
+![Copy API Key](images/5_copy_api_key.png)
 
-1. Detect the apartment address
-2. Calculate transit commute time
-3. Display a widget on the page showing the commute duration
+### 6. Enter API Key
+Paste the API Key into the Pace extension settings.
+![Paste API Key](images/6_paste_api_key_into_pace_extension.png)
 
-## How It Works
+### 7. Set Work Address
+Start typing your work address and select it from the dropdown menu.
+![Set Work Address](images/7_search_or_type_work_address.png)
 
-Pace uses [Geoapify's Routing API](https://www.geoapify.com/routing-api/) which provides:
-- Public transit routing using official GTFS data
-- Coverage for NYC and 40,000+ transit operators worldwide
-- Average transit times (not time-specific, but accurate for planning)
+### 8. Save Settings
+Click **"Save Settings"**. You're all set! Refresh any StreetEasy listing page to see your commute times.
+![Save Settings](images/8_save_settings.png)
 
-Note: The commute time shown is an average - actual times may vary by a few minutes depending on time of day.
+## Technologies Used
 
-## Troubleshooting
-
-**"Please set your work address"**
-- Click the Pace icon and enter your work address
-
-**"Invalid API key"**
-- Make sure you copied the entire API key from Geoapify
-- Check that your Geoapify account is active
-
-**"No transit route found"**
-- The API couldn't find a public transit route between these locations
-- This may happen for very remote areas
-
-**Widget doesn't appear**
-- Make sure you're on an individual listing page (not search results)
-- Try refreshing the page
-- Check the browser console for errors
-
-## Privacy
-
-- Your work address and API key are stored locally in Chrome's sync storage
-- Address lookups go directly to Geoapify's API
-- No data is sent to any other third-party servers
-
-## Development
-
-```
-pace/
-├── manifest.json           # Extension configuration
-├── popup/                  # Settings popup
-│   ├── popup.html
-│   ├── popup.js
-│   └── popup.css
-├── content/                # Page injection
-│   ├── content.js
-│   └── content.css
-├── background/             # API handling
-│   └── service-worker.js
-└── icons/                  # Extension icons
-```
-
-## Why Geoapify?
-
-Google Maps API requires a credit card even for the free tier. Geoapify offers:
-- Truly free tier (3,000 requests/day)
-- No credit card required
-- Good transit data coverage
-- Simple API
+- **JavaScript (ES6+)**: Core logic for the extension.
+- **Geoapify API**: Used for address geocoding and public transit routing.
+- **Chrome Extension API**: Manifest V3, Storage API, Scripting.
+- **HTML/CSS**: Popup interface and content injection styling.
 
 ## License
 
-MIT
+[MIT](LICENSE)
