@@ -131,11 +131,51 @@ async function waitForContent() {
   while (waited < maxWait) {
     // Check if main content has loaded
     if (document.querySelector('h1') || document.querySelector('[class*="address"]')) {
+      // Content found - now wait for DOM to stabilize before injecting
+      await waitForDomToSettle();
       return;
     }
     await sleep(interval);
     waited += interval;
   }
+}
+
+async function waitForDomToSettle(stabilityThreshold = 300, maxWait = 2000) {
+  // Wait until no DOM mutations occur for stabilityThreshold ms
+  // This ensures StreetEasy's SPA has finished rendering
+  return new Promise((resolve) => {
+    let timeoutId;
+    let totalWaited = 0;
+    const checkInterval = 50;
+
+    const observer = new MutationObserver(() => {
+      // Reset the stability timer on each mutation
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        observer.disconnect();
+        resolve();
+      }, stabilityThreshold);
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // Start the initial stability timer
+    timeoutId = setTimeout(() => {
+      observer.disconnect();
+      resolve();
+    }, stabilityThreshold);
+
+    // Safety timeout - don't wait forever
+    const safetyInterval = setInterval(() => {
+      totalWaited += checkInterval;
+      if (totalWaited >= maxWait) {
+        clearInterval(safetyInterval);
+        clearTimeout(timeoutId);
+        observer.disconnect();
+        resolve();
+      }
+    }, checkInterval);
+  });
 }
 
 function sleep(ms) {

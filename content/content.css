@@ -29,30 +29,23 @@
 .pace-route {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 8px;
   font-size: 12px;
   color: #111;
   margin-bottom: 10px;
+  text-align: center;
 }
 
 .pace-route-part {
-  flex: 1;
-  min-width: 0;
+  max-width: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.pace-route-part:first-child {
-  text-align: left;
-}
-
-.pace-route-part:last-child {
-  text-align: right;
-}
-
 .pace-route-to {
-  flex: 0 0 auto;
+  flex-shrink: 0;
   color: #666;
 }
 
@@ -97,6 +90,7 @@
 .pace-loading {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   font-size: 12px;
   color: #333;
