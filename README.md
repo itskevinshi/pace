@@ -12,10 +12,16 @@ Pace is a browser extension that automatically calculates and displays public tr
 ### See it in action
 
 **View commute times directly on listings:**
-![Commute Time Widget](images/listing_widget_demo.png)
+
+<p align="center">
+  <img src="images/listing_widget_demo.png" width="600">
+</p>
 
 **Smart address autofill:**
-![Address Autofill](images/work_address_input_autofill_demo.png)
+
+<p align="center">
+  <img src="images/work_address_input_autofill_demo.png" width="400">
+</p>
 
 ## Installation
 
@@ -29,39 +35,68 @@ Since this extension is not yet in the Chrome Web Store, you can install it in D
 
 ## Configuration
 
-To use Pace, you need a free API key from Geoapify. Follow these steps to set it up:
+To use Pace, you need a free API key from Geoapify (free, no credit card required).
+
+<details>
+<summary><strong>📋 Click to expand setup instructions</strong></summary>
 
 ### 1. Get your free API Key
 Open the Pace extension popup and click on **"Get free API key"**.
-![Click Get Free API Key](images/1_click_get_free_api_key.png)
+
+<p align="center">
+  <img src="images/1_click_get_free_api_key.png" width="400">
+</p>
 
 ### 2. Register an account
-Sign up for a free account on Geoapify (no credit card required).
-![Register Account](images/2_register_geoapify_account.png)
+Sign up for a free account on Geoapify.
+
+<p align="center">
+  <img src="images/2_register_geoapify_account.png" width="500">
+</p>
 
 ### 3. Create a project
 Once logged in, click on **"Create a project"** in the dashboard.
-![Create Project](images/3_click_create_a_project.png)
+
+<p align="center">
+  <img src="images/3_click_create_a_project.png" width="500">
+</p>
 
 ### 4. Name your project
 Give your project a name (e.g., "Pace Extension") and click OK.
-![Name Project](images/4_name_project.png)
+
+<p align="center">
+  <img src="images/4_name_project.png" width="400">
+</p>
 
 ### 5. Copy your API Key
 Copy the generated API Key from the dashboard.
-![Copy API Key](images/5_copy_api_key.png)
+
+<p align="center">
+  <img src="images/5_copy_api_key.png" width="500">
+</p>
 
 ### 6. Enter API Key
 Paste the API Key into the Pace extension settings.
-![Paste API Key](images/6_paste_api_key_into_pace_extension.png)
+
+<p align="center">
+  <img src="images/6_paste_api_key_into_pace_extension.png" width="400">
+</p>
 
 ### 7. Set Work Address
 Start typing your work address and select it from the dropdown menu.
-![Set Work Address](images/7_search_or_type_work_address.png)
+
+<p align="center">
+  <img src="images/7_search_or_type_work_address.png" width="400">
+</p>
 
 ### 8. Save Settings
 Click **"Save Settings"**. You're all set! Refresh any StreetEasy listing page to see your commute times.
-![Save Settings](images/8_save_settings.png)
+
+<p align="center">
+  <img src="images/8_save_settings.png" width="400">
+</p>
+
+</details>
 
 ## Technologies Used
 
