@@ -8,7 +8,9 @@
       "WebFetch(domain:developer.chrome.com)",
       "Bash(node:*)",
       "Bash(python:*)",
-      "WebFetch(domain:apidocs.geoapify.com)"
+      "WebFetch(domain:apidocs.geoapify.com)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

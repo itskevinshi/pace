@@ -111,7 +111,9 @@ async function processListing() {
         morning: response.morning,
         evening: response.evening,
         apartmentAddress: address,
-        workAddress
+        workAddress,
+        apartmentFormatted: response.apartmentFormatted,
+        workFormatted: response.workFormatted
       });
     }
   } catch (error) {
@@ -358,7 +360,7 @@ function removeWidget() {
   }
 }
 
-function injectWidget({ loading, error, morning, evening, apartmentAddress, workAddress }) {
+function injectWidget({ loading, error, morning, evening, apartmentAddress, workAddress, apartmentFormatted, workFormatted }) {
   removeWidget();
 
   const headerHtml = `
@@ -395,6 +397,12 @@ function injectWidget({ loading, error, morning, evening, apartmentAddress, work
   if (hasRoute) {
     widget.dataset.paceFrom = apartmentAddress;
     widget.dataset.paceTo = workAddress;
+    if (apartmentFormatted) {
+      widget.dataset.paceFromFormatted = apartmentFormatted;
+    }
+    if (workFormatted) {
+      widget.dataset.paceToFormatted = workFormatted;
+    }
   }
 
   if (loading) {
@@ -441,8 +449,8 @@ function injectWidget({ loading, error, morning, evening, apartmentAddress, work
           event.stopImmediatePropagation();
         }
 
-        const from = widget.dataset.paceFrom;
-        const to = widget.dataset.paceTo;
+        const from = widget.dataset.paceFromFormatted;
+        const to = widget.dataset.paceToFormatted;
         if (!from || !to) return;
 
         const url = buildGoogleMapsDirectionsUrl(from, to);
@@ -486,14 +494,10 @@ function insertWidgetSafely(widget, insertionPoint) {
 }
 
 function buildGoogleMapsDirectionsUrl(fromAddress, toAddress) {
-  const from = encodeForGoogleMapsPath(fromAddress);
-  const to = encodeForGoogleMapsPath(toAddress);
-  return `https://www.google.com/maps/dir/${from}/${to}/`;
-}
-
-function encodeForGoogleMapsPath(address) {
-  // Google Maps accepts both %20 and + for spaces in path segments.
-  return encodeURIComponent(address).replace(/%20/g, '+');
+  // Use Google Maps URLs API with transit mode pre-selected
+  const from = encodeURIComponent(fromAddress);
+  const to = encodeURIComponent(toAddress);
+  return `https://www.google.com/maps/dir/?api=1&origin=${from}&destination=${to}&travelmode=transit`;
 }
 
 function formatShortAddress(address) {

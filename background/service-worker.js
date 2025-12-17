@@ -51,6 +51,11 @@ async function handleCommuteRequest(apartmentAddress) {
   return {
     morning: routeResult,
     evening: routeResult,
+    apartmentCoords,
+    workCoords: finalWorkCoords,
+    apartmentFormatted: apartmentCoords.formatted,
+    // Use formatted from geocoding, or fall back to stored workAddress text
+    workFormatted: finalWorkCoords.formatted || workAddress,
     debug: debugInfo
   };
 }
@@ -80,12 +85,14 @@ async function geocodeAddress(address, apiKey, debugInfo, label) {
 
   if (data.features && data.features.length > 0) {
     const coords = data.features[0].geometry.coordinates;
+    const properties = data.features[0].properties;
     const result = {
       lat: coords[1],
-      lon: coords[0]
+      lon: coords[0],
+      formatted: properties.formatted
     };
     if (debugInfo) {
-      debugInfo.steps.push({ step: `Geocoding ${label} Success`, result, raw: data.features[0].properties });
+      debugInfo.steps.push({ step: `Geocoding ${label} Success`, result, raw: properties });
     }
     return result;
   }
