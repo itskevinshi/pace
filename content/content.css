@@ -17,15 +17,6 @@
   box-sizing: border-box;
 }
 
-.pace-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
 .pace-route {
   display: flex;
   align-items: center;
@@ -37,6 +28,11 @@
   text-align: center;
 }
 
+.pace-separator {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e0e0e0;
+}
 .pace-route-part {
   max-width: 45%;
   overflow: hidden;
@@ -47,21 +43,6 @@
 .pace-route-to {
   flex-shrink: 0;
   color: #666;
-}
-
-.pace-icon {
-  width: 28px;
-  height: 28px;
-  color: #0b62e4;
-  flex: 0 0 auto;
-}
-
-.pace-title {
-  font-size: 16px;
-  font-weight: 740;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: #0b62e4;
 }
 
 .pace-times {

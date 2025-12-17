@@ -10,7 +10,8 @@
       "Bash(python:*)",
       "WebFetch(domain:apidocs.geoapify.com)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(dir \"C:\\Users\\kevin\\Documents\\UVA\\Coding Projects\\pace\" /s /b)"
     ]
   }
 }

@@ -180,10 +180,6 @@ async function waitForDomToSettle(stabilityThreshold = 300, maxWait = 2000) {
   });
 }
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 function extractAddress(debugMode) {
   // Try multiple extraction strategies in order of reliability
   const strategies = [
@@ -363,14 +359,7 @@ function removeWidget() {
 function injectWidget({ loading, error, morning, evening, apartmentAddress, workAddress, apartmentFormatted, workFormatted }) {
   removeWidget();
 
-  const headerHtml = `
-    <div class="pace-header">
-      <svg class="pace-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path fill="currentColor" d="M7 2h10a3 3 0 0 1 3 3v10a3 3 0 0 1-2 2.83V19a1 1 0 1 1-2 0v-1H8v1a1 1 0 1 1-2 0v-1.17A3 3 0 0 1 4 15V5a3 3 0 0 1 3-3Zm10 2H7a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1ZM8 6h8a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2Zm0 4h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2Zm7 0h1a1 1 0 1 1 0 2h-1a1 1 0 1 1 0-2Zm-7 9a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm8 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Z"/>
-      </svg>
-      <span class="pace-title">COMMUTE TO WORK</span>
-    </div>
-  `;
+
 
   const hasRoute = Boolean(apartmentAddress && workAddress);
   const routeHtml = hasRoute
@@ -391,6 +380,9 @@ function injectWidget({ loading, error, morning, evening, apartmentAddress, work
     `
     : '';
 
+  // small separator to replace the removed header (keeps the underline)
+  const separatorHtml = `<div class="pace-separator"></div>`;
+
   const widget = document.createElement('div');
   widget.id = 'pace-commute-widget';
 
@@ -407,7 +399,7 @@ function injectWidget({ loading, error, morning, evening, apartmentAddress, work
 
   if (loading) {
     widget.innerHTML = `
-      ${headerHtml}
+      ${separatorHtml}
       ${routeHtml}
       <div class="pace-loading">
         <div class="pace-spinner"></div>
@@ -416,7 +408,7 @@ function injectWidget({ loading, error, morning, evening, apartmentAddress, work
     `;
   } else if (error) {
     widget.innerHTML = `
-      ${headerHtml}
+      ${separatorHtml}
       ${routeHtml}
       <div class="pace-error">
         <span class="pace-error-icon">&#9888;</span>
@@ -425,7 +417,7 @@ function injectWidget({ loading, error, morning, evening, apartmentAddress, work
     `;
   } else {
     widget.innerHTML = `
-      ${headerHtml}
+      ${separatorHtml}
       ${routeHtml}
       <div class="pace-times">
         <div class="pace-row pace-main">
