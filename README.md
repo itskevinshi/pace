@@ -18,12 +18,6 @@ Pace is a browser extension that automatically calculates and displays public tr
   <img src="images/search_result_transit_info.png" width="600">
 </p>
 
-**Smart address autofill:**
-
-<p align="center">
-  <img src="images/work_address_input_autofill_demo.png" width="400">
-</p>
-
 ## Installation
 
 Since this extension is not yet in the Chrome Web Store, you can install it in Developer Mode:
