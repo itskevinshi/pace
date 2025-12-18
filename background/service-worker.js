@@ -119,19 +119,49 @@ async function fetchTransitRoute(from, to, apiKey, debugInfo) {
   }
 
   const response = await fetch(url);
+  const data = await response.json();
+
+  // Log full response for debugging (only when debug mode is enabled)
+  if (debugInfo && (!response.ok || data.error || !data.features?.length)) {
+    console.warn('[Pace Service Worker] Routing API issue:', {
+      status: response.status,
+      statusText: response.statusText,
+      waypoints: waypoints,
+      fromFormatted: from.formatted,
+      toFormatted: to.formatted,
+      fromCoords: { lat: from.lat, lon: from.lon },
+      toCoords: { lat: to.lat, lon: to.lon },
+      fullResponse: data
+    });
+  }
 
   if (!response.ok) {
     if (response.status === 401) {
       throw new Error('Invalid API key. Please check your key in the Pace popup.');
     }
-    throw new Error('Network error. Please check your connection.');
+    if (response.status === 400) {
+      // Bad request - likely no transit route available
+      if (debugInfo) {
+        const errorDetail = data?.message || data?.error?.message || '';
+        console.warn('[Pace] Transit route 400 error detail:', errorDetail);
+      }
+      throw new Error('No transit route available for this address');
+    }
+    throw new Error(`API error: ${response.status} ${response.statusText}`);
   }
 
-  const data = await response.json();
+  if (data.error || data.statusCode === 400) {
+    const errorMsg = data.message || data.error?.message || data.error;
+    if (debugInfo) debugInfo.steps.push({ step: 'Routing API Error', error: data });
 
-  if (data.error) {
-    if (debugInfo) debugInfo.steps.push({ step: 'Routing API Error', error: data.error });
-    throw new Error(data.error.message || 'Routing API error');
+    // Provide user-friendly error messages
+    if (errorMsg?.includes('distance exceeds') || errorMsg?.includes('max distance')) {
+      throw new Error('Address geocoded to wrong location (not in NYC area)');
+    }
+    if (errorMsg?.includes('No path') || errorMsg?.includes('could not be found')) {
+      throw new Error('No transit route available');
+    }
+    throw new Error(errorMsg || 'Routing failed');
   }
 
   if (!data.features || data.features.length === 0) {

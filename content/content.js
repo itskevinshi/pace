@@ -1,14 +1,33 @@
 // Pace - StreetEasy Commute Times Content Script
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 let currentUrl = window.location.href;
 let isProcessing = false;
+let debugMode = false; // Module-level debug flag, loaded from storage
+
+// Search results state
+const commuteCache = new Map(); // address -> commute time result
+const processedCards = new WeakSet(); // track processed card elements
+let searchResultsObserver = null;
+let intersectionObserver = null;
+const pendingRequests = new Map(); // address -> Promise (for deduplication)
+const MAX_CONCURRENT_REQUESTS = 3;
+let activeRequests = 0;
+const requestQueue = [];
 
 // Initialize on page load
 init();
 
-function init() {
+async function init() {
+  // Load debug mode setting
+  const settings = await chrome.storage.sync.get(['debugMode']);
+  debugMode = settings.debugMode || false;
+
   if (isListingPage()) {
     processListing();
+  } else if (isSearchResultsPage()) {
+    setTimeout(processSearchResults, 500);
   }
 
   // Watch for SPA navigation using MutationObserver
@@ -17,9 +36,13 @@ function init() {
       currentUrl = window.location.href;
       // Remove existing widget when navigating away
       removeWidget();
+      cleanupSearchResultsObservers();
+
       if (isListingPage()) {
         // Small delay to let page content load
         setTimeout(processListing, 500);
+      } else if (isSearchResultsPage()) {
+        setTimeout(processSearchResults, 500);
       }
     }
   });
@@ -32,8 +55,12 @@ function init() {
   // Handle back/forward navigation
   window.addEventListener('popstate', () => {
     removeWidget();
+    cleanupSearchResultsObservers();
+
     if (isListingPage()) {
       setTimeout(processListing, 500);
+    } else if (isSearchResultsPage()) {
+      setTimeout(processSearchResults, 500);
     }
   });
 }
@@ -51,6 +78,15 @@ function isListingPage() {
   );
 }
 
+function isSearchResultsPage() {
+  const path = window.location.pathname;
+  // Match search results pages: /for-rent/nyc/..., /for-sale/nyc/...
+  // But NOT individual listings which have numeric IDs: /for-rent/12345
+  const isForRentSearch = path.startsWith('/for-rent/') && !/\/for-rent\/\d+$/.test(path);
+  const isForSaleSearch = path.startsWith('/for-sale/') && !/\/for-sale\/\d+$/.test(path);
+  return isForRentSearch || isForSaleSearch;
+}
+
 async function processListing() {
   if (isProcessing) return;
   isProcessing = true;
@@ -60,20 +96,19 @@ async function processListing() {
     await waitForContent();
 
     // Load settings
-    const { workAddress, debugMode } = await chrome.storage.sync.get(['workAddress', 'debugMode']);
+    const { workAddress } = await chrome.storage.sync.get(['workAddress']);
 
     if (debugMode) {
       console.group('[Pace Debug] Listing Processing');
       console.log('URL:', window.location.href);
     }
 
-    const address = extractAddress(debugMode);
+    const address = extractAddress();
     if (!address) {
       if (debugMode) {
         console.error('Failed to extract address from page');
         console.groupEnd();
       }
-      console.log('[Pace] Could not extract address from this page');
       injectWidget({ error: 'Could not detect address on this page.' });
       return;
     }
@@ -82,8 +117,6 @@ async function processListing() {
       console.log('Extracted Address:', address);
       console.log('Work Address:', workAddress);
     }
-
-    console.log('[Pace] Extracted address:', address);
 
     // Show loading state
     injectWidget({ loading: true, apartmentAddress: address, workAddress });
@@ -117,7 +150,9 @@ async function processListing() {
       });
     }
   } catch (error) {
-    console.error('[Pace] Error:', error);
+    if (debugMode) {
+      console.error('[Pace] Error:', error);
+    }
     injectWidget({ error: 'Failed to calculate commute times.' });
   } finally {
     isProcessing = false;
@@ -180,7 +215,7 @@ async function waitForDomToSettle(stabilityThreshold = 300, maxWait = 2000) {
   });
 }
 
-function extractAddress(debugMode) {
+function extractAddress() {
   // Try multiple extraction strategies in order of reliability
   const strategies = [
     { name: 'JSON-LD', fn: extractFromJsonLd },
@@ -345,6 +380,7 @@ function cleanAddress(text) {
     .split('|')[0]                          // Remove "| StreetEasy" suffix
     .split(' - ')[0]                        // Remove " - For Rent" suffix
     .split(' for ')[0]                      // Remove "for rent/sale"
+    .replace(/\s*#\S+/g, '')                // Remove apartment numbers (e.g., #574, #UNIT2)
     .replace(/\s+/g, ' ')                   // Normalize whitespace
     .trim();
 }
@@ -535,4 +571,497 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// ==================== SEARCH RESULTS FUNCTIONALITY ====================
+
+function cleanupSearchResultsObservers() {
+  if (searchResultsObserver) {
+    searchResultsObserver.disconnect();
+    searchResultsObserver = null;
+  }
+  if (intersectionObserver) {
+    intersectionObserver.disconnect();
+    intersectionObserver = null;
+  }
+  // Clear request queue
+  requestQueue.length = 0;
+  activeRequests = 0;
+}
+
+async function processSearchResults() {
+  // Check if user has configured the extension
+  const { workAddress, apiKey } = await chrome.storage.sync.get(['workAddress', 'apiKey']);
+  if (!workAddress || !apiKey) {
+    if (debugMode) {
+      console.log('[Pace] Extension not configured - skipping search results processing');
+    }
+    return;
+  }
+
+  // Wait for page content to stabilize
+  await waitForDomToSettle(300, 3000);
+
+  // Find all listing cards
+  const cards = findListingCards();
+  if (debugMode) {
+    console.log(`[Pace] Found ${cards.length} listing cards on search results page`);
+  }
+
+  if (cards.length === 0) return;
+
+  // Set up Intersection Observer for lazy loading
+  setupIntersectionObserver();
+
+  // Observe all cards
+  cards.forEach(card => {
+    if (!processedCards.has(card)) {
+      intersectionObserver.observe(card);
+    }
+  });
+
+  // Set up MutationObserver for infinite scroll / filter changes
+  setupSearchResultsObserver();
+}
+
+function findListingCards() {
+  // Primary selector: StreetEasy uses data-testid="listing-card"
+  const cards = document.querySelectorAll('[data-testid="listing-card"]');
+  if (cards.length > 0) {
+    if (debugMode) {
+      console.log(`[Pace] Found ${cards.length} cards using data-testid="listing-card"`);
+    }
+    return Array.from(cards);
+  }
+
+  // Fallback selectors
+  const fallbackSelectors = [
+    '[class*="ListingCard-module__cardContainer"]',
+    '[class*="ListingCard"]',
+    '[class*="listingCard"]'
+  ];
+
+  for (const selector of fallbackSelectors) {
+    const fallbackCards = document.querySelectorAll(selector);
+    if (fallbackCards.length > 0) {
+      if (debugMode) {
+        console.log(`[Pace] Found ${fallbackCards.length} cards using selector: ${selector}`);
+      }
+      return Array.from(fallbackCards);
+    }
+  }
+
+  if (debugMode) {
+    console.log('[Pace] No listing cards found');
+  }
+  return [];
+}
+
+// NJ main cities (these get used directly as "{city}, NJ")
+const NJ_CITIES = new Set([
+  'bayonne', 'cliffside park', 'east newark', 'edgewater', 'fort lee',
+  'guttenberg', 'harrison', 'hoboken', 'jersey city', 'kearny',
+  'north bergen', 'secaucus', 'union city', 'weehawken', 'west new york'
+]);
+
+// Jersey City sub-neighborhoods (these get mapped to "Jersey City, NJ")
+const JERSEY_CITY_NEIGHBORHOODS = new Set([
+  'bergen/lafayette', 'historic downtown', 'journal square', 'mcginley square',
+  'newport', 'the heights', 'waterfront', 'paulus hook', 'west side'
+]);
+
+function extractAddressFromCard(card) {
+  // StreetEasy address link has class containing "ListingDescription-module__addressTextAction"
+  // e.g., <a class="... ListingDescription-module__addressTextAction___xAFZJ">150 East 44th Street #48F</a>
+
+  let streetAddress = null;
+
+  // Strategy 1: Look for the specific address link class
+  const addressLink = card.querySelector('a[class*="ListingDescription-module__addressTextAction"]');
+  if (addressLink) {
+    const text = addressLink.textContent.trim();
+    if (text && text.length > 0) {
+      streetAddress = text;
+    }
+  }
+
+  // Strategy 2: Look for address-related classes
+  if (!streetAddress) {
+    const addressSelectors = [
+      '[class*="addressTextAction"]',
+      '[class*="address"]',
+      '[class*="Address"]'
+    ];
+
+    for (const selector of addressSelectors) {
+      const element = card.querySelector(selector);
+      if (element?.textContent?.trim()) {
+        const text = element.textContent.trim();
+        if (isAddressLike(text) && text.length < 100) {
+          streetAddress = cleanAddress(text);
+          break;
+        }
+      }
+    }
+  }
+
+  // Strategy 3: Look for any link that looks like an address
+  if (!streetAddress) {
+    const links = card.querySelectorAll('a');
+    for (const link of links) {
+      const text = link.textContent.trim();
+      if (isAddressLike(text) && text.length < 100) {
+        streetAddress = text;
+        break;
+      }
+    }
+  }
+
+  if (!streetAddress) return null;
+
+  // Clean the street address to remove apartment numbers, etc.
+  streetAddress = cleanAddress(streetAddress);
+
+  // Extract neighborhood from the card's title (e.g., "RENTAL UNIT IN LINCOLN SQUARE")
+  const neighborhood = extractNeighborhoodFromCard(card);
+
+  // Build full address with city/state for geocoding
+  // Don't include neighborhood names to avoid matching to wrong locations
+  // (e.g., "Beekman" is both a Manhattan neighborhood and an upstate NY town)
+  if (neighborhood) {
+    const neighborhoodLower = neighborhood.toLowerCase();
+
+    // NJ main city - use city name directly
+    if (NJ_CITIES.has(neighborhoodLower)) {
+      return `${streetAddress}, ${neighborhood}, NJ`;
+    }
+
+    // Jersey City sub-neighborhood - map to Jersey City
+    if (JERSEY_CITY_NEIGHBORHOODS.has(neighborhoodLower)) {
+      return `${streetAddress}, Jersey City, NJ`;
+    }
+
+    // All NYC neighborhoods (Manhattan, Brooklyn, Queens, Bronx, Staten Island)
+    // Just use "New York, NY" - street addresses are specific enough
+    return `${streetAddress}, New York, NY`;
+  }
+
+  // Fallback: assume NYC
+  return `${streetAddress}, New York, NY`;
+}
+
+function extractNeighborhoodFromCard(card) {
+  // Look for the title element like "RENTAL UNIT IN YORKVILLE" or "CONDO IN MIDTOWN"
+  const titleElement = card.querySelector('[class*="ListingDescription-module__title"]');
+  if (titleElement) {
+    const text = titleElement.textContent.trim();
+    // Extract neighborhood after "in " (case insensitive)
+    const match = text.match(/\bin\s+(.+)$/i);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+
+  // Fallback: look for any element with "in [Neighborhood]" pattern
+  const allText = card.textContent;
+  const patterns = [
+    /rental unit in\s+([^$\d]+?)(?=\s*\$|\s*\d|$)/i,
+    /condo(?:minium)? in\s+([^$\d]+?)(?=\s*\$|\s*\d|$)/i,
+    /co-?op in\s+([^$\d]+?)(?=\s*\$|\s*\d|$)/i,
+    /(?:single|two|multi)-?family (?:home )?in\s+([^$\d]+?)(?=\s*\$|\s*\d|$)/i,
+    /townhouse in\s+([^$\d]+?)(?=\s*\$|\s*\d|$)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = allText.match(pattern);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+
+  return null;
+}
+
+function findBedsBathsList(card) {
+  // Find the <ul> that contains beds/baths/sqft items
+  // StreetEasy uses: ul.BedsBathsSqft-module__list___*
+
+  // Strategy 1: Look for the specific BedsBathsSqft list class
+  const bedsBathsList = card.querySelector('ul[class*="BedsBathsSqft-module__list"]');
+  if (bedsBathsList) {
+    return bedsBathsList;
+  }
+
+  // Strategy 2: Look for ul that contains li items with bed/bath text
+  const lists = card.querySelectorAll('ul');
+  for (const ul of lists) {
+    const text = ul.textContent.toLowerCase();
+    if ((text.includes('bed') || text.includes('bath') || text.includes('studio')) &&
+        text.includes('ft')) {
+      return ul;
+    }
+  }
+
+  // Strategy 3: Fallback - find any container with bed/bath items
+  const containers = card.querySelectorAll('[class*="BedsBaths"], [class*="bedsBaths"]');
+  for (const container of containers) {
+    const ul = container.querySelector('ul');
+    if (ul) return ul;
+  }
+
+  return null;
+}
+
+function injectCommuteBadge(card, { loading, error, time, address }) {
+  // Remove existing badge if any
+  const existingBadge = card.querySelector('.pace-search-badge');
+  if (existingBadge) {
+    existingBadge.remove();
+  }
+
+  // Find the beds/baths/sqft list
+  const bedsBathsList = findBedsBathsList(card);
+
+  if (bedsBathsList) {
+    // Create an <li> element to match the existing list structure
+    const badgeLi = document.createElement('li');
+    badgeLi.className = 'pace-search-badge';
+    badgeLi.dataset.paceAddress = address || '';
+
+    // Try to copy the class from existing list items for consistent styling
+    const existingItem = bedsBathsList.querySelector('li');
+    if (existingItem && existingItem.className) {
+      badgeLi.className = existingItem.className + ' pace-search-badge';
+    }
+
+    // SVG transit icon matching StreetEasy's icon style
+    const transitIcon = `<svg height="16" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg" class="pace-badge-icon" fill="#949494"><path d="M12 2C8 2 4 2.5 4 6v9.5c0 1.93 1.57 3.5 3.5 3.5L6 20.5v.5h2l1.5-1.5h5L16 21h2v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-6H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>`;
+
+    if (loading) {
+      badgeLi.innerHTML = `${transitIcon}<span class="pace-badge-text">...</span>`;
+      badgeLi.classList.add('pace-badge-loading');
+    } else if (error) {
+      badgeLi.innerHTML = `${transitIcon}<span class="pace-badge-text">--</span>`;
+      badgeLi.classList.add('pace-badge-error');
+      badgeLi.title = error;
+    } else {
+      badgeLi.innerHTML = `${transitIcon}<span class="pace-badge-text">${escapeHtml(time)}</span>`;
+      badgeLi.classList.add('pace-badge-success');
+    }
+
+    // Append to the list
+    bedsBathsList.appendChild(badgeLi);
+  } else {
+    // Fallback: create a span badge and append to card
+    const badge = document.createElement('span');
+    badge.className = 'pace-search-badge';
+    badge.dataset.paceAddress = address || '';
+
+    const transitIcon = `<svg height="16" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg" class="pace-badge-icon" fill="#949494"><path d="M12 2C8 2 4 2.5 4 6v9.5c0 1.93 1.57 3.5 3.5 3.5L6 20.5v.5h2l1.5-1.5h5L16 21h2v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-6H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>`;
+
+    if (loading) {
+      badge.innerHTML = `${transitIcon}<span class="pace-badge-text">...</span>`;
+      badge.classList.add('pace-badge-loading');
+    } else if (error) {
+      badge.innerHTML = `${transitIcon}<span class="pace-badge-text">--</span>`;
+      badge.classList.add('pace-badge-error');
+      badge.title = error;
+    } else {
+      badge.innerHTML = `${transitIcon}<span class="pace-badge-text">${escapeHtml(time)}</span>`;
+      badge.classList.add('pace-badge-success');
+    }
+
+    card.appendChild(badge);
+  }
+}
+
+function setupIntersectionObserver() {
+  if (intersectionObserver) return;
+
+  intersectionObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const card = entry.target;
+          if (!processedCards.has(card)) {
+            processedCards.add(card);
+            queueCardForProcessing(card);
+          }
+          // Stop observing this card
+          intersectionObserver.unobserve(card);
+        }
+      });
+    },
+    {
+      rootMargin: '100px', // Start loading slightly before card is visible
+      threshold: 0
+    }
+  );
+}
+
+function setupSearchResultsObserver() {
+  if (searchResultsObserver) return;
+
+  searchResultsObserver = new MutationObserver((mutations) => {
+    // Check if new cards were added
+    let hasNewCards = false;
+
+    mutations.forEach(mutation => {
+      mutation.addedNodes.forEach(node => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          // Check if this node or its descendants contain listing cards
+          const newCards = findListingCards();
+          newCards.forEach(card => {
+            if (!processedCards.has(card) && intersectionObserver) {
+              hasNewCards = true;
+              intersectionObserver.observe(card);
+            }
+          });
+        }
+      });
+    });
+
+    if (hasNewCards && debugMode) {
+      console.log('[Pace] New listing cards detected');
+    }
+  });
+
+  // Observe the main content area for changes
+  const contentArea = document.querySelector('main') || document.body;
+  searchResultsObserver.observe(contentArea, {
+    childList: true,
+    subtree: true
+  });
+}
+
+function queueCardForProcessing(card) {
+  const address = extractAddressFromCard(card);
+
+  if (!address) {
+    if (debugMode) {
+      console.log('[Pace] Could not extract address from card');
+    }
+    return;
+  }
+
+  // Show loading state
+  injectCommuteBadge(card, { loading: true, address });
+
+  // Check cache first
+  if (commuteCache.has(address)) {
+    const cached = commuteCache.get(address);
+    injectCommuteBadge(card, cached);
+    return;
+  }
+
+  // Add to queue
+  requestQueue.push({ card, address });
+  processQueue();
+}
+
+async function processQueue() {
+  while (requestQueue.length > 0 && activeRequests < MAX_CONCURRENT_REQUESTS) {
+    const item = requestQueue.shift();
+    if (!item) break;
+
+    activeRequests++;
+    processCardRequest(item).finally(() => {
+      activeRequests--;
+      processQueue(); // Continue processing queue
+    });
+  }
+}
+
+async function processCardRequest({ card, address }) {
+  try {
+    // Check if there's already a pending request for this address
+    if (pendingRequests.has(address)) {
+      const result = await pendingRequests.get(address);
+      injectCommuteBadge(card, result);
+      return;
+    }
+
+    // Create the request promise
+    const requestPromise = getCommuteTimeForAddress(address);
+    pendingRequests.set(address, requestPromise);
+
+    const result = await requestPromise;
+
+    // Cache the result
+    commuteCache.set(address, result);
+    pendingRequests.delete(address);
+
+    // Update the badge
+    injectCommuteBadge(card, result);
+  } catch (error) {
+    if (debugMode) {
+      console.error('[Pace] Error processing card:', error);
+    }
+    const result = { error: 'Failed to get commute time', address };
+    commuteCache.set(address, result);
+    pendingRequests.delete(address);
+    injectCommuteBadge(card, result);
+  }
+}
+
+async function getCommuteTimeForAddress(address, maxRetries = 2) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      // Add delay before retry (not on first attempt)
+      if (attempt > 0) {
+        if (debugMode) {
+          console.log(`[Pace] Retrying request for ${address} (attempt ${attempt + 1}/${maxRetries + 1})`);
+        }
+        await sleep(500 * attempt); // 500ms, 1000ms for retries
+      }
+
+      const response = await chrome.runtime.sendMessage({
+        type: 'GET_COMMUTE_TIMES',
+        apartmentAddress: address
+      });
+
+      // Check if we got a valid response
+      if (!response) {
+        if (debugMode) {
+          console.warn(`[Pace] No response from service worker for ${address}`);
+        }
+        lastError = 'No response from service worker';
+        continue;
+      }
+
+      if (response.error) {
+        if (debugMode) {
+          console.warn(`[Pace] Error for ${address}:`, response.error);
+        }
+        lastError = response.error;
+        // Don't retry for permanent errors (these won't succeed on retry)
+        const permanentErrors = [
+          'not found', 'invalid', 'No transit route', 'wrong location',
+          'not in NYC', 'No path', 'Please set'
+        ];
+        if (permanentErrors.some(e => response.error.includes(e))) {
+          return { error: response.error, address };
+        }
+        continue; // Retry for transient errors (network issues, etc.)
+      }
+
+      return {
+        time: response.morning?.text || 'N/A',
+        address
+      };
+    } catch (error) {
+      if (debugMode) {
+        console.error(`[Pace] API error (attempt ${attempt + 1}):`, error);
+      }
+      lastError = 'API error';
+    }
+  }
+
+  // All retries exhausted
+  if (debugMode) {
+    console.log(`[Pace] All retries exhausted for ${address}`);
+  }
+  return { error: lastError || 'Failed after retries', address };
 }
