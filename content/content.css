@@ -170,3 +170,57 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ==================== SEARCH RESULTS BADGE STYLES ==================== */
+
+/* Badge as list item (inherits StreetEasy's li styling for separators) */
+li.pace-search-badge {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-size: 12px !important;
+}
+
+/* Badge as standalone span (fallback) */
+span.pace-search-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+.pace-badge-icon {
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.pace-badge-text {
+  font-weight: 600;
+}
+
+.pace-badge-loading {
+  color: #666;
+}
+
+.pace-badge-loading .pace-badge-text {
+  animation: pace-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pace-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.pace-badge-success {
+  color: #0b62e4 !important;
+}
+
+.pace-badge-success .pace-badge-text {
+  font-weight: 600;
+}
+
+.pace-badge-error {
+  color: #999 !important;
+}

@@ -5,16 +5,17 @@ Pace is a browser extension that automatically calculates and displays public tr
 ## Features
 
 - **Instant Commute Calculation**: Automatically detects the apartment address and calculates the commute time to your configured work address.
-- **Seamless Integration**: Displays the commute time prominently on the listing page.
+- **Seamless Integration**: Displays the commute time prominently on the listing page and in search results.
 - **Smart Address Search**: Includes an address autocomplete feature to easily find and set your work location.
 - **Privacy Focused**: Your API key and address are stored locally in your browser.
 
 ### See it in action
 
-**View commute times directly on listings:**
+**View commute times directly on listings and in search results:**
 
 <p align="center">
   <img src="images/listing_widget_demo.png" width="600">
+  <img src="images/search_result_transit_info.png" width="600">
 </p>
 
 **Smart address autofill:**
