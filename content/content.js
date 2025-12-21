@@ -216,23 +216,28 @@ async function waitForDomToSettle(stabilityThreshold = 300, maxWait = 2000) {
 }
 
 function extractAddress() {
-  // Try multiple extraction strategies in order of reliability
-  const strategies = [
-    { name: 'JSON-LD', fn: extractFromJsonLd },
-    { name: 'Meta Tags', fn: extractFromMeta },
-    { name: 'Page Title', fn: extractFromTitle },
-    { name: 'DOM Elements', fn: extractFromDom },
-    { name: 'URL Parsing', fn: extractFromUrl }
-  ];
-
-  for (const strategy of strategies) {
-    const result = strategy.fn();
+  // Primary: "About the building" section contains the full formatted address
+  const addressEl = document.querySelector('[class*="AboutBuildingSection_address"]');
+  if (addressEl) {
+    const address = addressEl.textContent.trim();
     if (debugMode) {
-      console.log(`Strategy [${strategy.name}]:`, result || 'No match');
+      console.log('[Pace] Address from AboutBuildingSection:', address);
     }
-    if (result) return result;
+    return address;
   }
 
+  // Fallback: Try JSON-LD structured data
+  const jsonLdAddress = extractFromJsonLd();
+  if (jsonLdAddress) {
+    if (debugMode) {
+      console.log('[Pace] Address from JSON-LD:', jsonLdAddress);
+    }
+    return jsonLdAddress;
+  }
+
+  if (debugMode) {
+    console.log('[Pace] Could not extract address');
+  }
   return null;
 }
 
@@ -272,90 +277,6 @@ function extractFromJsonLd() {
       // Invalid JSON, continue
     }
   }
-  return null;
-}
-
-function extractFromMeta() {
-  // Try various meta tags that might contain address
-  const selectors = [
-    'meta[property="og:street-address"]',
-    'meta[name="address"]',
-    'meta[property="og:locality"]'
-  ];
-
-  for (const selector of selectors) {
-    const meta = document.querySelector(selector);
-    if (meta?.content) {
-      return meta.content;
-    }
-  }
-
-  // Try og:title which often includes address
-  const ogTitle = document.querySelector('meta[property="og:title"]')?.content;
-  if (ogTitle && isAddressLike(ogTitle)) {
-    return cleanAddress(ogTitle);
-  }
-
-  return null;
-}
-
-function extractFromTitle() {
-  const title = document.title;
-  // StreetEasy titles often have format: "Address | StreetEasy" or "Address - Apartment for Rent"
-  if (title && isAddressLike(title)) {
-    return cleanAddress(title);
-  }
-  return null;
-}
-
-function extractFromDom() {
-  // Common selectors for address elements
-  const selectors = [
-    '[data-testid="listing-address"]',
-    '[class*="ListingAddress"]',
-    '[class*="listing-address"]',
-    '[class*="PropertyAddress"]',
-    '[itemprop="address"]',
-    'h1[class*="address"]',
-    '.listing-title h1',
-    // StreetEasy specific patterns
-    '[class*="Heading"] + [class*="Text"]',
-    '.details-title',
-    '.building-title'
-  ];
-
-  for (const selector of selectors) {
-    const element = document.querySelector(selector);
-    if (element?.textContent?.trim()) {
-      const text = element.textContent.trim();
-      if (isAddressLike(text)) {
-        return cleanAddress(text);
-      }
-    }
-  }
-
-  // Try the first h1 as it often contains the address
-  const h1 = document.querySelector('h1');
-  if (h1?.textContent && isAddressLike(h1.textContent)) {
-    return cleanAddress(h1.textContent);
-  }
-
-  return null;
-}
-
-function extractFromUrl() {
-  const path = window.location.pathname;
-
-  // /building/[building-name-address]
-  const buildingMatch = path.match(/\/building\/([^\/]+)/);
-  if (buildingMatch) {
-    // Convert URL format to address
-    const address = buildingMatch[1]
-      .replace(/-/g, ' ')
-      .replace(/\b\w/g, c => c.toUpperCase());
-    return `${address}, New York, NY`;
-  }
-
   return null;
 }
 
