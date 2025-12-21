@@ -11,7 +11,8 @@
       "WebFetch(domain:apidocs.geoapify.com)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(dir \"C:\\Users\\kevin\\Documents\\UVA\\Coding Projects\\pace\" /s /b)"
+      "Bash(dir \"C:\\Users\\kevin\\Documents\\UVA\\Coding Projects\\pace\" /s /b)",
+      "WebFetch(domain:www.geoapify.com)"
     ]
   }
 }

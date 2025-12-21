@@ -522,10 +522,56 @@ function insertWidgetSafely(widget, insertionPoint) {
 }
 
 function buildGoogleMapsDirectionsUrl(fromAddress, toAddress) {
-  // Use Google Maps URLs API with transit mode pre-selected
-  const from = encodeURIComponent(fromAddress);
-  const to = encodeURIComponent(toAddress);
-  return `https://www.google.com/maps/dir/?api=1&origin=${from}&destination=${to}&travelmode=transit`;
+  // Use Google Maps legacy URL format with departure time for next Monday at 8 AM
+  // We use + for spaces as it's more standard for Google Maps path segments
+  const from = encodeURIComponent(fromAddress).replace(/%20/g, '+');
+  const to = encodeURIComponent(toAddress).replace(/%20/g, '+');
+
+  // Calculate next Monday at 8 AM local time
+  const nextMondayTimestamp = getNextMondayAt8AM();
+
+  // Build URL with correct nested container structure:
+  // !4m6!4m5 - nested containers
+  // !2m3!6e0!7e2!8j{timestamp} - time settings (6e0=depart at, 7e2=use local time for timestamp, 8j=timestamp)
+  // !3e3 - transit mode
+  // dirflg=r - legacy flag to ensure transit mode is selected (especially on mobile)
+  // Reference: https://mstickles.wordpress.com/2015/06/23/gmaps-urls-diropt3/
+  return `https://www.google.com/maps/dir/${from}/${to}/data=!4m6!4m5!2m3!6e0!7e2!8j${nextMondayTimestamp}!3e3?dirflg=r`;
+}
+
+function getNextMondayAt8AM() {
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, ...
+
+  // Calculate days until next Monday
+  // If today is Monday and before 8 AM, use today; otherwise next Monday
+  let daysUntilMonday;
+  if (dayOfWeek === 1) {
+    // Today is Monday - check if it's before 8 AM
+    const currentHour = now.getHours();
+    if (currentHour < 8) {
+      daysUntilMonday = 0; // Use today
+    } else {
+      daysUntilMonday = 7; // Use next Monday
+    }
+  } else if (dayOfWeek === 0) {
+    // Sunday - next Monday is tomorrow
+    daysUntilMonday = 1;
+  } else {
+    // Tuesday-Saturday: calculate days to next Monday
+    daysUntilMonday = (8 - dayOfWeek) % 7;
+  }
+
+  // Create date for next Monday at 8:00 AM local time
+  const nextMonday = new Date(now);
+  nextMonday.setDate(now.getDate() + daysUntilMonday);
+  nextMonday.setHours(8, 0, 0, 0);
+
+  // Google Maps with !7e2 interprets the timestamp as a local time value,
+  // not as UTC. So we subtract the timezone offset to make the timestamp
+  // "look like" 8 AM when Google Maps reads it without conversion.
+  const offsetSeconds = nextMonday.getTimezoneOffset() * 60;
+  return Math.floor(nextMonday.getTime() / 1000) - offsetSeconds;
 }
 
 function formatShortAddress(address) {
