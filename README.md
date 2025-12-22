@@ -1,5 +1,7 @@
 # Pace - StreetEasy Commute Times
 
+![Visitors](https://visitor-badge.laobi.icu/badge?page_id=itskevinshi.pace)
+
 Pace is a browser extension that automatically calculates and displays public transit commute times directly on StreetEasy apartment listings. It helps you make better decisions by showing you exactly how long it will take to get to work from any apartment you're viewing.
 
 ## Features
