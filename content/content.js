@@ -332,7 +332,7 @@ function injectWidget({ loading, error, morning, evening, apartmentAddress, work
   const actionHtml = hasRoute && !loading && !error
     ? `
       <div class="pace-actions">
-        <button type="button" class="pace-btn" data-pace-action="open-route">VIEW DETAILED ROUTE</button>
+        <button type="button" class="pace-btn" data-pace-action="open-route">VIEW ROUTE ON GOOGLE MAPS</button>
       </div>
     `
     : '';

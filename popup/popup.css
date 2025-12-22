@@ -72,8 +72,8 @@ input[type="text"] {
 
 input[type="text"]:focus {
   outline: none;
-  border-color: #0066cc;
-  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+  border-color: #0041d9;
+  box-shadow: 0 0 0 3px rgba(0, 65, 217, 0.1);
 }
 
 .autocomplete-container {
@@ -135,7 +135,7 @@ small {
 }
 
 small a {
-  color: #0066cc;
+  color: #0041d9;
   text-decoration: none;
 }
 
@@ -146,7 +146,7 @@ small a:hover {
 button {
   width: 100%;
   padding: 12px;
-  background: #0066cc;
+  background: #0041d9;
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -157,11 +157,11 @@ button {
 }
 
 button:hover {
-  background: #0052a3;
+  background: #0036b3;
 }
 
 button:active {
-  background: #004080;
+  background: #002b8f;
 }
 
 .status {
