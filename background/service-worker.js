@@ -1,5 +1,20 @@
 // Pace - Service Worker using Geoapify API (free, no credit card required)
 
+// ============================================================================
+// Constants
+// ============================================================================
+
+/** NYC center coordinates for geocoding bias. Also used in popup/popup.js */
+const NYC_CENTER = { lat: 40.785091, lon: -73.968285 };
+
+/** Geoapify API base URLs */
+const GEOAPIFY_GEOCODE_URL = 'https://api.geoapify.com/v1/geocode/search';
+const GEOAPIFY_ROUTING_URL = 'https://api.geoapify.com/v1/routing';
+
+// ============================================================================
+// Message Handler
+// ============================================================================
+
 // Listen for messages from content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'GET_COMMUTE_TIMES') {
@@ -10,6 +25,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+/**
+ * Handles a commute time request from the content script.
+ * Geocodes addresses and calculates transit route.
+ * @param {string} apartmentAddress - The apartment address to calculate commute from
+ * @returns {Promise<Object>} Result with morning/evening times, coordinates, and formatted addresses
+ * @throws {Error} If work address not configured or geocoding fails
+ */
 async function handleCommuteRequest(apartmentAddress) {
   // Get stored settings
   const { workAddress, apiKey, debugMode, workCoords } = await chrome.storage.sync.get(['workAddress', 'apiKey', 'debugMode', 'workCoords']);
@@ -60,28 +82,56 @@ async function handleCommuteRequest(apartmentAddress) {
   };
 }
 
+/**
+ * Geocodes an address to coordinates using Geoapify API.
+ * @param {string} address - The address to geocode
+ * @param {string} apiKey - Geoapify API key
+ * @param {Object|null} debugInfo - Debug info object to append steps to
+ * @param {string} label - Label for debug logging (e.g., 'Apartment', 'Work')
+ * @returns {Promise<{lat: number, lon: number, formatted: string}|null>} Coordinates or null if not found
+ */
 async function geocodeAddress(address, apiKey, debugInfo, label) {
   const params = new URLSearchParams({
     text: address,
     apiKey: apiKey,
     limit: 1,
-    filter: 'countrycode:us', // Focus on US addresses for StreetEasy
-    bias: 'proximity:-73.968285,40.785091' // Bias towards NYC center
+    filter: 'countrycode:us',
+    bias: `proximity:${NYC_CENTER.lon},${NYC_CENTER.lat}`
   });
 
-  const url = `https://api.geoapify.com/v1/geocode/search?${params}`;
+  const url = `${GEOAPIFY_GEOCODE_URL}?${params}`;
 
   if (debugInfo) {
     debugInfo.steps.push({ step: `Geocoding ${label}`, url: url.replace(apiKey, 'REDACTED') });
   }
 
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error('Network error during geocoding.');
+  let response;
+  try {
+    response = await fetch(url);
+  } catch (error) {
+    // Network error (offline, DNS failure, CORS, etc.)
+    if (debugInfo) {
+      debugInfo.steps.push({ step: `Geocoding ${label} Network Error`, error: error.message });
+    }
+    throw new Error('Network error - please check your internet connection.');
   }
 
-  const data = await response.json();
+  if (!response.ok) {
+    if (debugInfo) {
+      debugInfo.steps.push({ step: `Geocoding ${label} HTTP Error`, status: response.status });
+    }
+    throw new Error('Geocoding service error. Please try again.');
+  }
+
+  let data;
+  try {
+    data = await response.json();
+  } catch (error) {
+    if (debugInfo) {
+      debugInfo.steps.push({ step: `Geocoding ${label} Parse Error`, error: error.message });
+    }
+    throw new Error('Invalid response from geocoding service.');
+  }
 
   if (data.features && data.features.length > 0) {
     const coords = data.features[0].geometry.coordinates;
@@ -103,8 +153,15 @@ async function geocodeAddress(address, apiKey, debugInfo, label) {
   return null;
 }
 
+/**
+ * Fetches transit route between two coordinates using Geoapify API.
+ * @param {{lat: number, lon: number, formatted: string}} from - Origin coordinates
+ * @param {{lat: number, lon: number, formatted: string}} to - Destination coordinates
+ * @param {string} apiKey - Geoapify API key
+ * @param {Object|null} debugInfo - Debug info object to append steps to
+ * @returns {Promise<{text: string, minutes: number|null}>} Route duration
+ */
 async function fetchTransitRoute(from, to, apiKey, debugInfo) {
-  // Geoapify routing API uses waypoints as lat,lon|lat,lon
   const waypoints = `${from.lat},${from.lon}|${to.lat},${to.lon}`;
 
   const params = new URLSearchParams({
@@ -113,16 +170,39 @@ async function fetchTransitRoute(from, to, apiKey, debugInfo) {
     apiKey: apiKey
   });
 
-  const url = `https://api.geoapify.com/v1/routing?${params}`;
+  const url = `${GEOAPIFY_ROUTING_URL}?${params}`;
   if (debugInfo) {
     debugInfo.steps.push({ step: 'Routing API Request', url: url.replace(apiKey, 'REDACTED') });
   }
 
-  const response = await fetch(url);
-  const data = await response.json();
+  let response;
+  try {
+    response = await fetch(url);
+  } catch (error) {
+    // Network error (offline, DNS failure, CORS, etc.)
+    if (debugInfo) {
+      debugInfo.steps.push({ step: 'Routing Network Error', error: error.message });
+    }
+    throw new Error('Network error - please check your internet connection.');
+  }
+
+  // Try to parse JSON - Geoapify returns JSON even for error responses
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    if (debugInfo) {
+      debugInfo.steps.push({ step: 'Routing Parse Error', error: error.message, status: response.status });
+    }
+    // If we can't parse JSON and response is not ok, throw a generic error
+    if (!response.ok) {
+      throw new Error(`Routing service error (${response.status}). Please try again.`);
+    }
+    throw new Error('Invalid response from routing service.');
+  }
 
   // Log full response for debugging (only when debug mode is enabled)
-  if (debugInfo && (!response.ok || data.error || !data.features?.length)) {
+  if (debugInfo && (!response.ok || data?.error || !data?.features?.length)) {
     console.warn('[Pace Service Worker] Routing API issue:', {
       status: response.status,
       statusText: response.statusText,
@@ -150,8 +230,8 @@ async function fetchTransitRoute(from, to, apiKey, debugInfo) {
     throw new Error(`API error: ${response.status} ${response.statusText}`);
   }
 
-  if (data.error || data.statusCode === 400) {
-    const errorMsg = data.message || data.error?.message || data.error;
+  if (data?.error || data?.statusCode === 400) {
+    const errorMsg = data?.message || data?.error?.message || data?.error;
     if (debugInfo) debugInfo.steps.push({ step: 'Routing API Error', error: data });
 
     // Provide user-friendly error messages
@@ -164,7 +244,7 @@ async function fetchTransitRoute(from, to, apiKey, debugInfo) {
     throw new Error(errorMsg || 'Routing failed');
   }
 
-  if (!data.features || data.features.length === 0) {
+  if (!data?.features || data.features.length === 0) {
     if (debugInfo) debugInfo.steps.push({ step: 'Routing API No Results', data });
     return { text: 'No transit route', minutes: null };
   }

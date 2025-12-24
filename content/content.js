@@ -2,15 +2,71 @@
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+/**
+ * Simple LRU cache with TTL support.
+ * - Evicts oldest entries when maxSize is exceeded
+ * - Entries expire after ttlMs milliseconds
+ * - Uses Map's insertion order for LRU tracking
+ */
+class LRUCache {
+  constructor(maxSize = 100, ttlMs = 30 * 60 * 1000) { // Default: 100 entries, 30 min TTL
+    this.maxSize = maxSize;
+    this.ttlMs = ttlMs;
+    this.cache = new Map(); // key -> { value, timestamp }
+  }
+
+  has(key) {
+    if (!this.cache.has(key)) return false;
+    const entry = this.cache.get(key);
+    // Check if expired
+    if (Date.now() - entry.timestamp > this.ttlMs) {
+      this.cache.delete(key);
+      return false;
+    }
+    return true;
+  }
+
+  get(key) {
+    if (!this.has(key)) return undefined;
+    const entry = this.cache.get(key);
+    // Move to end (most recently used) by re-inserting
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+    return entry.value;
+  }
+
+  set(key, value) {
+    // Delete first if exists (to update position)
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    }
+    // Evict oldest entries if at capacity
+    while (this.cache.size >= this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
+    }
+    this.cache.set(key, { value, timestamp: Date.now() });
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+
+  get size() {
+    return this.cache.size;
+  }
+}
+
 let currentUrl = window.location.href;
 let isProcessing = false;
 let debugMode = false; // Module-level debug flag, loaded from storage
 
 // Search results state
-const commuteCache = new Map(); // address -> commute time result
+const commuteCache = new LRUCache(100, 30 * 60 * 1000); // 100 entries max, 30 min TTL
 const processedCards = new WeakSet(); // track processed card elements
 let searchResultsObserver = null;
 let intersectionObserver = null;
+let searchResultsDebounceTimer = null; // debounce timer for mutation observer
 const pendingRequests = new Map(); // address -> Promise (for deduplication)
 const MAX_CONCURRENT_REQUESTS = 3;
 let activeRequests = 0;
@@ -61,6 +117,16 @@ async function init() {
       setTimeout(processListing, 500);
     } else if (isSearchResultsPage()) {
       setTimeout(processSearchResults, 500);
+    }
+  });
+
+  // Clear cache when work address changes (user updated settings)
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'sync' && (changes.workAddress || changes.workCoords)) {
+      if (debugMode) {
+        console.log('[Pace] Work address changed, clearing commute cache');
+      }
+      commuteCache.clear();
     }
   });
 }
@@ -215,6 +281,11 @@ async function waitForDomToSettle(stabilityThreshold = 300, maxWait = 2000) {
   });
 }
 
+/**
+ * Extracts the apartment address from a StreetEasy listing page.
+ * Tries multiple strategies: DOM elements and JSON-LD structured data.
+ * @returns {string|null} The extracted address or null if not found/invalid
+ */
 function extractAddress() {
   // Primary: "About the building" section contains the full formatted address
   const addressEl = document.querySelector('[class*="AboutBuildingSection_address"]');
@@ -223,7 +294,13 @@ function extractAddress() {
     if (debugMode) {
       console.log('[Pace] Address from AboutBuildingSection:', address);
     }
-    return address;
+    // Validate before returning
+    if (isValidExtractedAddress(address)) {
+      return address;
+    }
+    if (debugMode) {
+      console.log('[Pace] Address failed validation:', address);
+    }
   }
 
   // Fallback: Try JSON-LD structured data
@@ -232,11 +309,17 @@ function extractAddress() {
     if (debugMode) {
       console.log('[Pace] Address from JSON-LD:', jsonLdAddress);
     }
-    return jsonLdAddress;
+    // Validate before returning
+    if (isValidExtractedAddress(jsonLdAddress)) {
+      return jsonLdAddress;
+    }
+    if (debugMode) {
+      console.log('[Pace] JSON-LD address failed validation:', jsonLdAddress);
+    }
   }
 
   if (debugMode) {
-    console.log('[Pace] Could not extract address');
+    console.log('[Pace] Could not extract valid address');
   }
   return null;
 }
@@ -293,6 +376,50 @@ function isAddressLike(text) {
   ];
 
   return addressPatterns.some(pattern => pattern.test(text));
+}
+
+/**
+ * Validates that an extracted address is usable for geocoding.
+ * Filters out common invalid patterns that would waste API calls.
+ */
+function isValidExtractedAddress(text) {
+  if (!text || typeof text !== 'string') return false;
+
+  const trimmed = text.trim();
+
+  // Too short to be a valid address
+  if (trimmed.length < 5) return false;
+
+  // Too long - probably grabbed wrong element
+  if (trimmed.length > 200) return false;
+
+  // Common placeholder/loading patterns (case-insensitive)
+  const invalidPatterns = [
+    /^loading/i,
+    /^error/i,
+    /^n\/?a$/i,
+    /^tbd$/i,
+    /^pending/i,
+    /^unavailable/i,
+    /^unknown/i,
+    /^null$/i,
+    /^undefined$/i,
+    /^\.\.\./,
+    /^-+$/,
+    /^_+$/
+  ];
+
+  if (invalidPatterns.some(pattern => pattern.test(trimmed))) {
+    return false;
+  }
+
+  // Must have at least one letter (not just numbers/symbols)
+  if (!/[a-zA-Z]/.test(trimmed)) {
+    return false;
+  }
+
+  // Should look like an address (has a number followed by text, or contains street-like words)
+  return isAddressLike(trimmed);
 }
 
 function cleanAddress(text) {
@@ -543,6 +670,10 @@ function escapeHtml(text) {
 // ==================== SEARCH RESULTS FUNCTIONALITY ====================
 
 function cleanupSearchResultsObservers() {
+  if (searchResultsDebounceTimer) {
+    clearTimeout(searchResultsDebounceTimer);
+    searchResultsDebounceTimer = null;
+  }
   if (searchResultsObserver) {
     searchResultsObserver.disconnect();
     searchResultsObserver = null;
@@ -637,6 +768,12 @@ const JERSEY_CITY_NEIGHBORHOODS = new Set([
   'newport', 'the heights', 'waterfront', 'paulus hook', 'west side'
 ]);
 
+/**
+ * Extracts the apartment address from a StreetEasy search result card.
+ * Combines street address with city/state based on neighborhood.
+ * @param {Element} card - The listing card DOM element
+ * @returns {string|null} Full address (e.g., "123 Main St, New York, NY") or null if not found
+ */
 function extractAddressFromCard(card) {
   // StreetEasy address link has class containing "ListingDescription-module__addressTextAction"
   // e.g., <a class="... ListingDescription-module__addressTextAction___xAFZJ">150 East 44th Street #48F</a>
@@ -688,6 +825,14 @@ function extractAddressFromCard(card) {
 
   // Clean the street address to remove apartment numbers, etc.
   streetAddress = cleanAddress(streetAddress);
+
+  // Validate the cleaned address before making API calls
+  if (!isValidExtractedAddress(streetAddress)) {
+    if (debugMode) {
+      console.log('[Pace] Card address failed validation:', streetAddress);
+    }
+    return null;
+  }
 
   // Extract neighborhood from the card's title (e.g., "RENTAL UNIT IN LINCOLN SQUARE")
   const neighborhood = extractNeighborhoodFromCard(card);
@@ -870,27 +1015,31 @@ function setupSearchResultsObserver() {
   if (searchResultsObserver) return;
 
   searchResultsObserver = new MutationObserver((mutations) => {
-    // Check if new cards were added
-    let hasNewCards = false;
+    // Check if any element nodes were added (quick check before debouncing)
+    const hasElementNodes = mutations.some(mutation =>
+      Array.from(mutation.addedNodes).some(node => node.nodeType === Node.ELEMENT_NODE)
+    );
 
-    mutations.forEach(mutation => {
-      mutation.addedNodes.forEach(node => {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          // Check if this node or its descendants contain listing cards
-          const newCards = findListingCards();
-          newCards.forEach(card => {
-            if (!processedCards.has(card) && intersectionObserver) {
-              hasNewCards = true;
-              intersectionObserver.observe(card);
-            }
-          });
+    if (!hasElementNodes) return;
+
+    // Debounce: wait for DOM to settle before querying for new cards
+    // This prevents calling findListingCards() hundreds of times during infinite scroll
+    clearTimeout(searchResultsDebounceTimer);
+    searchResultsDebounceTimer = setTimeout(() => {
+      const newCards = findListingCards();
+      let observedCount = 0;
+
+      newCards.forEach(card => {
+        if (!processedCards.has(card) && intersectionObserver) {
+          intersectionObserver.observe(card);
+          observedCount++;
         }
       });
-    });
 
-    if (hasNewCards && debugMode) {
-      console.log('[Pace] New listing cards detected');
-    }
+      if (observedCount > 0 && debugMode) {
+        console.log(`[Pace] New listing cards detected: ${observedCount}`);
+      }
+    }, 200); // 200ms debounce - balances responsiveness with efficiency
   });
 
   // Observe the main content area for changes
@@ -901,6 +1050,11 @@ function setupSearchResultsObserver() {
   });
 }
 
+/**
+ * Queues a listing card for commute time processing.
+ * Checks cache first, then adds to request queue if needed.
+ * @param {Element} card - The listing card DOM element
+ */
 function queueCardForProcessing(card) {
   const address = extractAddressFromCard(card);
 
@@ -971,6 +1125,13 @@ async function processCardRequest({ card, address }) {
   }
 }
 
+/**
+ * Fetches commute time for an address from the service worker.
+ * Includes retry logic for transient errors.
+ * @param {string} address - The apartment address to get commute time for
+ * @param {number} [maxRetries=2] - Maximum number of retry attempts
+ * @returns {Promise<{time: string, address: string}|{error: string, address: string}>} Result or error
+ */
 async function getCommuteTimeForAddress(address, maxRetries = 2) {
   let lastError = null;
 

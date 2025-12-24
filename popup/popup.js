@@ -1,3 +1,23 @@
+// ============================================================================
+// Constants
+// ============================================================================
+
+/** NYC center coordinates for geocoding bias. Also used in background/service-worker.js */
+const NYC_CENTER = { lat: 40.785091, lon: -73.968285 };
+
+/** Geoapify autocomplete API URL */
+const GEOAPIFY_AUTOCOMPLETE_URL = 'https://api.geoapify.com/v1/geocode/autocomplete';
+
+/** Debounce delay for autocomplete requests (ms) */
+const AUTOCOMPLETE_DEBOUNCE_MS = 300;
+
+/** Debounce delay for auto-save (ms) */
+const AUTOSAVE_DEBOUNCE_MS = 400;
+
+// ============================================================================
+// Initialization
+// ============================================================================
+
 document.addEventListener('DOMContentLoaded', async () => {
   const workAddressInput = document.getElementById('workAddress');
   const autocompleteResults = document.getElementById('autocomplete-results');
@@ -47,7 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     autoSaveTimer = setTimeout(() => {
       autoSaveTimer = null;
       void performSave();
-    }, 400);
+    }, AUTOSAVE_DEBOUNCE_MS);
   };
 
   // Load existing settings
@@ -89,9 +109,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           apiKey: apiKey,
           limit: 5,
           filter: 'countrycode:us',
-          bias: 'proximity:-73.968285,40.785091' // Bias towards NYC
+          bias: `proximity:${NYC_CENTER.lon},${NYC_CENTER.lat}`
         });
-        const response = await fetch(`https://api.geoapify.com/v1/geocode/autocomplete?${params}`);
+        const response = await fetch(`${GEOAPIFY_AUTOCOMPLETE_URL}?${params}`);
         
         if (!response.ok) {
           const errorData = await response.json();
@@ -132,7 +152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } catch (error) {
         console.error('Autocomplete error:', error);
       }
-    }, 300);
+    }, AUTOCOMPLETE_DEBOUNCE_MS);
   });
 
   // Close autocomplete when clicking outside
