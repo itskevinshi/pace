@@ -525,7 +525,7 @@ function injectWidget({ loading, error, morning, evening, apartmentAddress, work
           event.stopImmediatePropagation();
         }
 
-        const from = widget.dataset.paceFromFormatted;
+        const from = widget.dataset.paceFrom;
         const to = widget.dataset.paceToFormatted;
         if (!from || !to) return;
 

@@ -12,7 +12,8 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(dir \"C:\\Users\\kevin\\Documents\\UVA\\Coding Projects\\pace\" /s /b)",
-      "WebFetch(domain:www.geoapify.com)"
+      "WebFetch(domain:www.geoapify.com)",
+      "Bash(cd:*)"
     ]
   }
 }
