@@ -768,6 +768,79 @@ const JERSEY_CITY_NEIGHBORHOODS = new Set([
   'newport', 'the heights', 'waterfront', 'paulus hook', 'west side'
 ]);
 
+// Brooklyn neighborhoods (from StreetEasy)
+const BROOKLYN_NEIGHBORHOODS = new Set([
+  'bath beach', 'bay ridge', 'fort hamilton', 'bedford-stuyvesant', 'ocean hill',
+  'stuyvesant heights', 'bensonhurst', 'bergen beach', 'boerum hill', 'borough park',
+  'mapleton', 'brighton beach', 'brooklyn heights', 'brownsville', 'bushwick',
+  'canarsie', 'carroll gardens', 'clinton hill', 'cobble hill',
+  'columbia st waterfront district', 'coney island', 'crown heights', 'weeksville',
+  'dumbo', 'vinegar hill', 'ditmas park', 'fiske terrace', 'downtown brooklyn',
+  'dyker heights', 'east flatbush', 'farragut', 'wingate', 'east new york',
+  'city line', 'cypress hills', 'new lots', 'starrett city', 'flatbush',
+  'flatlands', 'fort greene', 'gerritsen beach', 'gowanus', 'gravesend',
+  'greenpoint', 'greenwood', 'kensington', 'manhattan beach', 'marine park',
+  'midwood', 'mill basin', 'ocean parkway', 'old mill basin', 'park slope',
+  'prospect heights', 'prospect lefferts gardens', 'prospect park south',
+  'red hook', 'seagate', 'sheepshead bay', 'homecrest', 'madison', 'sunset park',
+  'williamsburg', 'east williamsburg', 'windsor terrace'
+]);
+
+// Queens neighborhoods (from StreetEasy)
+const QUEENS_NEIGHBORHOODS = new Set([
+  'astoria', 'ditmars-steinway', 'auburndale', 'bayside', 'bay terrace (queens)',
+  'bellerose', 'briarwood', 'brookville', 'cambria heights', 'clearview',
+  'college point', 'corona', 'douglaston', 'east elmhurst', 'elmhurst',
+  'floral park', 'flushing', 'east flushing', 'murray hill (queens)',
+  'forest hills', 'fresh meadows', 'glen oaks', 'glendale', 'hillcrest',
+  'hollis', 'howard beach', 'hamilton beach', 'lindenwood', 'old howard beach',
+  'ramblersville', 'rockwood park', 'jackson heights', 'jamaica', 'jamaica estates',
+  'jamaica hills', 'kew gardens', 'kew gardens hills', 'laurelton', 'little neck',
+  'long island city', 'hunters point', 'maspeth', 'middle village', 'new hyde park',
+  'north corona', 'oakland gardens', 'ozone park', 'pomonok', 'queens village',
+  'rego park', 'richmond hill', 'ridgewood', 'rockaway all', 'arverne', 'bayswater',
+  'belle harbor', 'breezy point', 'broad channel', 'edgemere', 'far rockaway',
+  'hammels', 'neponsit', 'rockaway park', 'rosedale', 'south jamaica',
+  'south ozone park', 'south richmond hill', 'springfield gardens', 'st. albans',
+  'sunnyside', 'utopia', 'whitestone', 'beechhurst', 'malba', 'woodhaven', 'woodside'
+]);
+
+// Bronx neighborhoods (from StreetEasy)
+const BRONX_NEIGHBORHOODS = new Set([
+  'baychester', 'bedford park', 'belmont', 'bronxwood', 'castle hill', 'city island',
+  'co-op city', 'concourse', 'country club', 'crotona park east', 'east tremont',
+  'west farms', 'eastchester', 'edenwald', 'fordham', 'highbridge', 'hunts point',
+  'kingsbridge', 'kingsbridge heights', 'laconia', 'longwood', 'melrose',
+  'morris heights', 'morris park', 'morrisania', 'claremont', 'mott haven',
+  'north new york', 'norwood', 'parkchester', 'pelham bay', 'pelham gardens',
+  'pelham parkway', 'port morris', 'riverdale', 'fieldston', 'spuyten duyvil',
+  'schuylerville', 'soundview', 'throgs neck', 'locust point', 'tremont', 'mt. hope',
+  'university heights', 'van nest', 'wakefield', 'westchester village',
+  'westchester square', 'williamsbridge', 'woodlawn', 'woodstock'
+]);
+
+// Staten Island neighborhoods (from StreetEasy)
+const STATEN_ISLAND_NEIGHBORHOODS = new Set([
+  // East Shore
+  'east shore', 'arrochar', 'bay terrace', 'dongan hills', 'egbertville',
+  'emerson hill', 'fort wadsworth', 'grant city', 'grasmere', 'lighthouse hill',
+  'midland beach', 'new dorp', 'new dorp beach', 'oakwood', 'oakwood beach',
+  'ocean breeze', 'richmondtown', 'south beach', 'todt hill',
+  // Mid-Island
+  'mid-island', 'bulls head', 'castleton corners', 'graniteville', 'manor heights',
+  'meiers corners', 'new springville', 'sunnyside (staten island)', 'westerleigh', 'willowbrook',
+  // North Shore
+  'north shore', 'arlington', 'clifton', 'elm park', 'grymes hill', 'howland hook',
+  'mariners harbor', 'new brighton', 'park hill', 'port richmond', 'rosebank',
+  'saint george', 'shore acres', 'silver lake', 'stapleton', 'tompkinsville', 'west brighton',
+  // South Shore
+  'south shore', 'annadale', 'arden heights', 'charleston', 'eltingville', 'great kills',
+  'greenridge', 'huguenot', 'pleasant plains', 'princes bay', 'richmond valley',
+  'rossville', 'tottenville', 'woodrow',
+  // West Shore
+  'west shore', 'bloomfield', 'chelsea (staten island)', 'travis'
+]);
+
 /**
  * Extracts the apartment address from a StreetEasy search result card.
  * Combines street address with city/state based on neighborhood.
@@ -853,8 +926,27 @@ function extractAddressFromCard(card) {
       return `${streetAddress}, Jersey City, NJ`;
     }
 
-    // All NYC neighborhoods (Manhattan, Brooklyn, Queens, Bronx, Staten Island)
-    // Just use "New York, NY" - street addresses are specific enough
+    // Brooklyn neighborhoods
+    if (BROOKLYN_NEIGHBORHOODS.has(neighborhoodLower)) {
+      return `${streetAddress}, Brooklyn, NY`;
+    }
+
+    // Queens neighborhoods
+    if (QUEENS_NEIGHBORHOODS.has(neighborhoodLower)) {
+      return `${streetAddress}, Queens, NY`;
+    }
+
+    // Bronx neighborhoods
+    if (BRONX_NEIGHBORHOODS.has(neighborhoodLower)) {
+      return `${streetAddress}, Bronx, NY`;
+    }
+
+    // Staten Island neighborhoods
+    if (STATEN_ISLAND_NEIGHBORHOODS.has(neighborhoodLower)) {
+      return `${streetAddress}, Staten Island, NY`;
+    }
+
+    // Default to "New York, NY" for Manhattan and unknown neighborhoods
     return `${streetAddress}, New York, NY`;
   }
 
