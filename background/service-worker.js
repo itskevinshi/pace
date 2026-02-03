@@ -1,5 +1,38 @@
 // Pace - Service Worker using Geoapify API (free, no credit card required)
 
+// ============================================
+// Install Tracking (Google Forms)
+// ============================================
+const INSTALL_TRACKING = {
+  formId: '1FAIpQLSfIly4U6mOC3jZW5hdgtFgIG-9MIq0ceLcSKI77zPoZXrUEZg',
+  entryId: 'entry.466641828',
+};
+
+chrome.runtime.onInstalled.addListener(async (details) => {
+  if (details.reason !== 'install') return;
+
+  const { installReported } = await chrome.storage.local.get('installReported');
+  if (installReported) return;
+
+  const installId = crypto.randomUUID();
+  const formUrl = `https://docs.google.com/forms/d/e/${INSTALL_TRACKING.formId}/formResponse`;
+  const formData = new URLSearchParams();
+  formData.append(INSTALL_TRACKING.entryId, installId);
+
+  try {
+    await fetch(formUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString(),
+    });
+    await chrome.storage.local.set({ installReported: true, installId });
+    console.log('[Pace] Install tracked:', installId);
+  } catch (err) {
+    console.error('[Pace] Failed to track install:', err);
+  }
+});
+
 // ============================================================================
 // Constants
 // ============================================================================
