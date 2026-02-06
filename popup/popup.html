@@ -21,27 +21,31 @@
       <small>Enter your full work address</small>
     </div>
 
-    <div class="form-group">
-      <label for="apiKey">Geoapify API Key</label>
-      <input type="text" id="apiKey" placeholder="Your API key">
-      <small>
-        <a href="https://myprojects.geoapify.com/register" target="_blank" rel="noopener">
-          Get free API key
-        </a>
-        (no credit card needed)
-      </small>
-    </div>
-
-    <div class="form-group checkbox-group">
-      <label class="checkbox-label">
-        <input type="checkbox" id="debugMode">
-        <span>Debug Mode</span>
-      </label>
-      <small>Show extraction and API details in the console</small>
-    </div>
-
     <button id="saveBtn">Save Settings</button>
     <div id="status" class="status"></div>
+
+    <details class="advanced-settings" id="advancedSettings">
+      <summary>Advanced Settings</summary>
+      <div class="advanced-content">
+        <div class="form-group">
+          <label for="apiKey">Geoapify API Key</label>
+          <input type="text" id="apiKey" placeholder="Your API key (optional)">
+          <small>
+            Pace includes a shared API key with a daily limit.
+            For heavy use, add your own free key from
+            <a href="https://myprojects.geoapify.com/register" target="_blank" rel="noopener">Geoapify</a>
+            (no credit card needed).
+          </small>
+        </div>
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="debugMode">
+            <span>Debug Mode</span>
+          </label>
+          <small>Show extraction and API details in the console</small>
+        </div>
+      </div>
+    </details>
   </div>
 
   <script src="popup.js"></script>

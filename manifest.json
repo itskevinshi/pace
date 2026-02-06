@@ -10,7 +10,8 @@
   "host_permissions": [
     "https://streeteasy.com/*",
     "https://api.geoapify.com/*",
-    "https://docs.google.com/*"
+    "https://docs.google.com/*",
+    "https://*.workers.dev/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js",
