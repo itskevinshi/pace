@@ -1,0 +1,10 @@
+name = "pace-api"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+[vars]
+# Comma-separated origins allowed beyond chrome-extension:// (optional)
+ALLOWED_ORIGINS = ""
+
+# GEOAPIFY_API_KEY is stored as a secret, not here.
+# Run: wrangler secret put GEOAPIFY_API_KEY

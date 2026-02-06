@@ -7,7 +7,8 @@ Pace is a browser extension that automatically calculates and displays public tr
 - **Instant Commute Calculation**: Automatically detects the apartment address and calculates the commute time to your configured work address.
 - **Seamless Integration**: Displays the commute time prominently on the listing page and in search results.
 - **Smart Address Search**: Includes an address autocomplete feature to easily find and set your work location.
-- **Privacy Focused**: Your API key and address are stored locally in your browser.
+- **Zero Config**: Works out of the box - just enter your work address and go.
+- **Privacy Focused**: Your address is stored locally in your browser.
 
 ### See it in action
 
@@ -30,73 +31,29 @@ Since this extension is not yet in the Chrome Web Store, you can install it in D
 
 ## Configuration
 
-To use Pace, you need a free API key from Geoapify (free, no credit card required).
+1. Click the Pace extension icon in your toolbar.
+2. Type your work address and select it from the autocomplete dropdown.
+3. Click **Save Settings**.
+4. Refresh any StreetEasy listing page to see your commute times.
 
-<details>
-<summary><strong>📋 Click to expand setup instructions</strong></summary>
+That's it! Pace includes a shared API key so there's nothing else to set up.
 
-### 1. Get your free API Key
-Open the Pace extension popup and click on **"Get free API key"**.
+### Advanced: Bring Your Own API Key
 
-<p align="center">
-  <img src="images/1_click_get_free_api_key.png" width="400">
-</p>
+The shared API key has a daily usage limit. If you hit it, you can add your own free Geoapify key:
 
-### 2. Register an account
-Sign up for a free account on Geoapify.
+1. Open the Pace popup and expand **Advanced Settings** at the bottom.
+2. Click the link to register at [Geoapify](https://myprojects.geoapify.com/register) (free, no credit card needed).
+3. Create a project and copy your API key.
+4. Paste it into the API key field and save.
 
-<p align="center">
-  <img src="images/2_register_geoapify_account.png" width="500">
-</p>
-
-### 3. Create a project
-Once logged in, click on **"Create a project"** in the dashboard.
-
-<p align="center">
-  <img src="images/3_click_create_a_project.png" width="500">
-</p>
-
-### 4. Name your project
-Give your project a name (e.g., "Pace Extension") and click OK.
-
-<p align="center">
-  <img src="images/4_name_project.png" width="400">
-</p>
-
-### 5. Copy your API Key
-Copy the generated API Key from the dashboard.
-
-<p align="center">
-  <img src="images/5_copy_api_key.png" width="500">
-</p>
-
-### 6. Enter API Key
-Paste the API Key into the Pace extension settings.
-
-<p align="center">
-  <img src="images/6_paste_api_key_into_pace_extension.png" width="400">
-</p>
-
-### 7. Set Work Address
-Start typing your work address and select it from the dropdown menu.
-
-<p align="center">
-  <img src="images/7_search_or_type_work_address.png" width="400">
-</p>
-
-### 8. Save Settings
-Click **"Save Settings"**. You're all set! Refresh any StreetEasy listing page to see your commute times.
-
-<p align="center">
-  <img src="images/8_save_settings.png" width="400">
-</p>
-
-</details>
+Your own key will be used instead of the shared one, giving you a dedicated quota.
 
 ## Technologies Used
 
 - **JavaScript (ES6+)**: Core logic for the extension.
 - **Geoapify API**: Used for address geocoding and public transit routing.
+- **Cloudflare Workers**: Lightweight proxy to keep the shared API key server-side.
 - **Chrome Extension API**: Manifest V3, Storage API, Scripting.
 - **HTML/CSS**: Popup interface and content injection styling.
 

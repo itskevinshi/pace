@@ -5,8 +5,14 @@
 /** NYC center coordinates for geocoding bias. Also used in background/service-worker.js */
 const NYC_CENTER = { lat: 40.785091, lon: -73.968285 };
 
-/** Geoapify autocomplete API URL */
+/** Geoapify autocomplete API URL (used when the user provides their own key) */
 const GEOAPIFY_AUTOCOMPLETE_URL = 'https://api.geoapify.com/v1/geocode/autocomplete';
+
+/**
+ * Shared Cloudflare Worker proxy (used when no user key is configured).
+ * Must match the WORKER_BASE_URL in background/service-worker.js.
+ */
+const WORKER_BASE_URL = 'https://pace-api.kevinshi0.workers.dev';
 
 /** Debounce delay for autocomplete requests (ms) */
 const AUTOCOMPLETE_DEBOUNCE_MS = 300;
@@ -23,14 +29,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const autocompleteResults = document.getElementById('autocomplete-results');
   const apiKeyInput = document.getElementById('apiKey');
   const debugModeInput = document.getElementById('debugMode');
+  const advancedSettings = document.getElementById('advancedSettings');
   const saveBtn = document.getElementById('saveBtn');
   const statusDiv = document.getElementById('status');
 
-  console.log('[Pace] Popup initialized. Elements:', {
-    workAddressInput: !!workAddressInput,
-    apiKeyInput: !!apiKeyInput,
-    saveBtn: !!saveBtn
-  });
+  console.log('[Pace] Popup initialized.');
 
   let autoSaveTimer = null;
   let autocompleteTimer = null;
@@ -49,7 +52,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         await chrome.storage.sync.set(data);
       } catch (error) {
-        // Silent: autosave should never block normal usage.
         console.error('Error auto-saving settings:', error);
       }
     };
@@ -74,47 +76,66 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     const { workAddress, apiKey, debugMode, workCoords } = await chrome.storage.sync.get(['workAddress', 'apiKey', 'debugMode', 'workCoords']);
     if (workAddress) workAddressInput.value = workAddress;
-    if (apiKey) apiKeyInput.value = apiKey;
+    if (apiKey) {
+      apiKeyInput.value = apiKey;
+      // Auto-open advanced settings if user already has a key configured
+      advancedSettings.open = true;
+    }
     if (debugMode !== undefined) debugModeInput.checked = debugMode;
+    if (debugMode) advancedSettings.open = true;
     if (workCoords) selectedCoords = workCoords;
   } catch (error) {
     console.error('Error loading settings:', error);
   }
 
+  /**
+   * Builds the autocomplete URL.
+   * If the user has their own API key, call Geoapify directly.
+   * Otherwise, use the shared worker proxy.
+   */
+  function buildAutocompleteUrl(query, apiKey) {
+    const shared = {
+      text: query,
+      limit: 5,
+      filter: 'countrycode:us',
+      bias: `proximity:${NYC_CENTER.lon},${NYC_CENTER.lat}`,
+    };
+
+    if (apiKey) {
+      const params = new URLSearchParams({ ...shared, apiKey });
+      return `${GEOAPIFY_AUTOCOMPLETE_URL}?${params}`;
+    }
+
+    const params = new URLSearchParams(shared);
+    return `${WORKER_BASE_URL}/autocomplete?${params}`;
+  }
+
   // Autocomplete logic
   workAddressInput.addEventListener('input', () => {
     const query = workAddressInput.value.trim();
-    const apiKey = apiKeyInput.value.trim();
 
     if (autocompleteTimer) clearTimeout(autocompleteTimer);
-    
-    // Clear results if query is too short
-    if (query.length < 3) {
-      autocompleteResults.style.display = 'none';
-      return;
-    }
 
-    // If no API key, we can't do autocomplete
-    if (!apiKey) {
-      console.warn('[Pace] Cannot autocomplete: No API key entered');
+    if (query.length < 3) {
       autocompleteResults.style.display = 'none';
       return;
     }
 
     autocompleteTimer = setTimeout(async () => {
       try {
+        const apiKey = apiKeyInput.value.trim();
+        const url = buildAutocompleteUrl(query, apiKey);
         console.log('[Pace] Fetching autocomplete for:', query);
-        const params = new URLSearchParams({
-          text: query,
-          apiKey: apiKey,
-          limit: 5,
-          filter: 'countrycode:us',
-          bias: `proximity:${NYC_CENTER.lon},${NYC_CENTER.lat}`
-        });
-        const response = await fetch(`${GEOAPIFY_AUTOCOMPLETE_URL}?${params}`);
-        
+
+        const response = await fetch(url);
+
+        if (response.status === 429) {
+          console.warn('[Pace] Autocomplete rate limited');
+          return;
+        }
+
         if (!response.ok) {
-          const errorData = await response.json();
+          const errorData = await response.json().catch(() => ({}));
           console.error('[Pace] Autocomplete API error:', errorData);
           return;
         }
@@ -128,7 +149,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const item = document.createElement('div');
             item.className = 'autocomplete-item';
             const props = feature.properties;
-            
+
             item.innerHTML = `
               <span class="main-text">${props.address_line1}</span>
               <span class="secondary-text">${props.address_line2}</span>
@@ -164,13 +185,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Auto-save on input so closing the popup doesn't lose values.
   workAddressInput.addEventListener('input', () => void saveDraft());
-  apiKeyInput.addEventListener('input', () => {
-    void saveDraft();
-    // If user just pasted API key, trigger autocomplete if address is already typed
-    if (workAddressInput.value.trim().length >= 3) {
-      workAddressInput.dispatchEvent(new Event('input'));
-    }
-  });
+  apiKeyInput.addEventListener('input', () => void saveDraft());
   debugModeInput.addEventListener('change', () => void saveDraft({ immediate: true }));
   // Save immediately on change (blur) to be extra reliable.
   workAddressInput.addEventListener('change', () => void saveDraft({ immediate: true }));
@@ -188,20 +203,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const apiKey = apiKeyInput.value.trim();
     const debugMode = debugModeInput.checked;
 
-    console.log('[Pace] Save clicked. Work Address:', workAddress, 'API Key:', apiKey ? 'PRESENT' : 'MISSING');
+    console.log('[Pace] Save clicked. Work Address:', workAddress, 'API Key:', apiKey ? 'PRESENT' : 'using shared');
 
-    // Validation
     if (!workAddress) {
       showStatus('Please enter your work address', 'error');
       return;
     }
 
-    if (!apiKey) {
-      showStatus('Please enter your Geoapify API key', 'error');
-      return;
-    }
-
-    if (apiKey.length < 20) {
+    // Only validate API key length if one was provided
+    if (apiKey && apiKey.length < 20) {
       showStatus('API key seems too short. Please check it.', 'error');
       return;
     }

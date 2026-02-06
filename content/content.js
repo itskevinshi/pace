@@ -689,8 +689,8 @@ function cleanupSearchResultsObservers() {
 
 async function processSearchResults() {
   // Check if user has configured the extension
-  const { workAddress, apiKey } = await chrome.storage.sync.get(['workAddress', 'apiKey']);
-  if (!workAddress || !apiKey) {
+  const { workAddress } = await chrome.storage.sync.get(['workAddress']);
+  if (!workAddress) {
     if (debugMode) {
       console.log('[Pace] Extension not configured - skipping search results processing');
     }
