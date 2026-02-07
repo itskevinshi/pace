@@ -30,6 +30,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     });
     await chrome.storage.local.set({ installReported: true, installId });
     console.log('[Pace] Install tracked:', installId);
+    setUninstallUrl(installId);
   } catch (err) {
     console.error('[Pace] Failed to track install:', err);
   }
@@ -51,6 +52,27 @@ const GEOAPIFY_ROUTING_URL = 'https://api.geoapify.com/v1/routing';
  * TODO: Replace with your deployed worker URL after running `wrangler deploy`.
  */
 const WORKER_BASE_URL = 'https://pace-api.kevinshi0.workers.dev';
+
+// ============================================
+// Uninstall Tracking
+// ============================================
+
+function setUninstallUrl(installId) {
+  if (!installId) return;
+  const url = `${WORKER_BASE_URL}/uninstall?id=${encodeURIComponent(installId)}`;
+  chrome.runtime.setUninstallURL(url, () => {
+    if (chrome.runtime.lastError) {
+      console.error('[Pace] Failed to set uninstall URL:', chrome.runtime.lastError.message);
+    } else {
+      console.log('[Pace] Uninstall URL set');
+    }
+  });
+}
+
+// Re-set uninstall URL on every service worker startup (covers worker restarts)
+chrome.storage.local.get('installId').then(({ installId }) => {
+  if (installId) setUninstallUrl(installId);
+});
 
 // ============================================================================
 // Message Handler

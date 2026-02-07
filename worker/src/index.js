@@ -4,6 +4,12 @@
 
 const GEOAPIFY_BASE = 'https://api.geoapify.com/v1';
 
+/** Uninstall tracking — submits install ID to a Google Form server-side. */
+const UNINSTALL_TRACKING = {
+  formId: '1FAIpQLSfxXP91_OA_luig-XeFdufWWDw7RjU_pMvkAQOsQkOlx-0_JA',
+  entryId: 'entry.1524631095',
+};
+
 /** Allowed query parameters per route (apiKey is NEVER accepted from clients). */
 const ROUTE_CONFIG = {
   '/geocode': {
@@ -37,6 +43,11 @@ export default {
     // Health check — no origin validation needed
     if (path === '/health') {
       return corsResponse(Response.json({ status: 'ok' }));
+    }
+
+    // Uninstall tracking — direct browser navigation, no origin validation
+    if (path === '/uninstall') {
+      return handleUninstall(url);
     }
 
     // Validate origin — only allow Chrome extensions + explicit allowlist
@@ -127,3 +138,48 @@ function corsResponse(response) {
 function jsonError(status, message) {
   return Response.json({ error: message }, { status });
 }
+
+async function handleUninstall(url) {
+  const id = url.searchParams.get('id');
+
+  // Fire-and-forget POST to Google Form (best-effort)
+  if (id) {
+    const formUrl = `https://docs.google.com/forms/d/e/${UNINSTALL_TRACKING.formId}/formResponse`;
+    const body = new URLSearchParams();
+    body.append(UNINSTALL_TRACKING.entryId, id);
+    try {
+      await fetch(formUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      });
+    } catch {
+      // Best-effort — don't block the thank-you page
+    }
+  }
+
+  return new Response(UNINSTALL_HTML, {
+    headers: { 'Content-Type': 'text/html;charset=UTF-8' },
+  });
+}
+
+const UNINSTALL_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pace — Uninstalled</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f9fafb; color: #1f2937; }
+    .card { text-align: center; max-width: 420px; padding: 48px 32px; }
+    h1 { font-size: 1.5rem; margin-bottom: 8px; }
+    p { color: #6b7280; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Thanks for trying Pace!</h1>
+    <p>We're sorry to see you go. If you have feedback, feel free to open an issue on my GitHub.</p>
+  </div>
+</body>
+</html>`;
